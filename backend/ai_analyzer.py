@@ -26,10 +26,16 @@ DEFAULT_SYSTEM_PROMPT = (
     "1. НЕ размышляй вслух, НЕ пиши анализ, НЕ рассуждай по шагам.\n"
     "2. Ответь СРАЗУ ТОЛЬКО одним JSON-объектом, без markdown-ограждений "
     "(без ```) и без текста до/после.\n"
-    '3. Формат: {"segments":[{"start":<сек>,"end":<сек>,"reason":"..."}]}.\n'
-    "4. start/end — числа в секундах, в пределах длительности видео.\n"
-    "5. Сегменты не пересекаются; не выдумывай моменты, которых нет в кадрах.\n"
-    '6. Если подходящих моментов нет — верни {"segments":[]}.'
+    '3. Формат: {"segments":[{"start":<сек>,"end":<сек>,"reason":"...",'
+    '"score":<1-100>}],"heatmap":[{"t":<сек>,"s":<0-100>},...]}.\n'
+    "4. У каждого сегмента указывай score — целое число 1..100, насколько "
+    "момент интересен.\n"
+    "5. heatmap — массив точек «интересности» по времени анализируемого "
+    "фрагмента: {t, s}, через каждые 1-3 секунды; s=0 — не интересно, "
+    "100 — максимально интересно; для длинного фрагмента точки можно реже.\n"
+    "6. start/end и t — числа в секундах, в пределах длительности видео.\n"
+    "7. Сегменты не пересекаются; не выдумывай моменты, которых нет в кадрах.\n"
+    '8. Если подходящих моментов нет — верни {"segments":[],"heatmap":[]}.'
 )
 
 DEFAULT_FRAME_STEP = 10   # отправлять каждый N-й кадр видео по умолчанию
@@ -175,20 +181,19 @@ def _chat(endpoint: str, api_key: str | None, model: str,
     return content
 
 
-def parse_segments(text: str, duration: float, min_len: float = 1.0) -> list[dict]:
-    """Разбирает ответ ИИ (JSON) в список сегментов {start,end,reason,source:'ai'}.
+def _extract_json(text: str):
+    """Извлекает JSON (dict/list) из ответа ИИ.
 
-    Устойчиво к ```json ... ``` ограждениям и лишнему тексту вокруг JSON.
-    Значения клампируются в [0, duration], сегменты сортируются по времени.
+    Устойчиво к ```json ... ``` ограждениям, «рассуждениям» модели и лишнему
+    тексту вокруг JSON. Предпочитает объект с полем "segments". Возвращает
+    None, если JSON не найден или не распарсился.
     """
     if not text:
-        return []
+        return None
     t = text.strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", t, re.S | re.I)
     if fence:
         t = fence.group(1).strip()
-    # Предпочитаем объект с "segments" — в «рассуждениях» модели может быть
-    # много текста и лишних скобок.
     start = t.find('"segments"')
     if start >= 0:
         start = t.rfind("{", 0, start)
@@ -196,12 +201,20 @@ def parse_segments(text: str, duration: float, min_len: float = 1.0) -> list[dic
         start = t.find("{")
     end = t.rfind("}")
     if start < 0 or end <= start:
-        return []
+        return None
     try:
-        data = json.loads(t[start:end + 1])
+        return json.loads(t[start:end + 1])
     except Exception:
-        return []
+        return None
 
+
+def parse_segments(text: str, duration: float, min_len: float = 1.0) -> list[dict]:
+    """Разбирает ответ ИИ (JSON) в список сегментов {start,end,reason,source:'ai'}.
+
+    Устойчиво к ```json ... ``` ограждениям и лишнему тексту вокруг JSON.
+    Значения клампируются в [0, duration], сегменты сортируются по времени.
+    """
+    data = _extract_json(text)
     segs = data.get("segments") if isinstance(data, dict) else data
     if not isinstance(segs, list):
         return []
@@ -236,6 +249,41 @@ def parse_segments(text: str, duration: float, min_len: float = 1.0) -> list[dic
             "source": "ai",
         })
     out.sort(key=lambda x: x["start"])
+    return out
+
+
+def parse_heatmap(text: str, duration: float) -> list[dict]:
+    """Извлекает из ответа ИИ точки тепловой карты {"t","s"}.
+
+    Поле heatmap — массив {t: секунды, s: интенсивность 0..100}. Значения
+    клампируются в [0, duration] и нормализуются в диапазон 0..1. Возвращает
+    отсортированные по t точки, или [] если поле отсутствует.
+    """
+    data = _extract_json(text)
+    if not isinstance(data, dict):
+        return []
+    hm = data.get("heatmap")
+    if not isinstance(hm, list):
+        return []
+    out = []
+    for p in hm:
+        if not isinstance(p, dict):
+            continue
+        try:
+            t = float(p.get("t"))
+            s = float(p.get("s"))
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(t) or not math.isfinite(s):
+            continue
+        t = max(0.0, t)
+        if duration and duration > 0:
+            t = min(duration, t)
+        out.append({
+            "t": round(t, 2),
+            "s": round(max(0.0, min(1.0, s / 100.0)), 4),
+        })
+    out.sort(key=lambda p: p["t"])
     return out
 
 
@@ -318,31 +366,38 @@ def _build_messages(system_prompt: str, *, method: str, duration: float,
         "В расшифровке реплики помечены спикером («Спикер N: …») — учитывай, "
         "кто говорит, при выборе моментов (реплики персонажей, диалоги).\n"
         if has_speakers else "")
+    per_window = 10
+    count_note = ""
     if max_segments and max_segments > 0:
         per_window = max(1, min(int(max_segments), 10))
         count_note = (
             f"Всего по ВСЕМУ видео нужно выбрать максимум {max_segments} "
-            "моментов. У каждого сегмента указывай score — целое число 1..100, "
-            "насколько момент важен/интересен (100 — самый важный); при отборе "
-            "самых интересных учитывается score.\n"
+            "моментов.\n"
             f"В этом фрагменте верни не более {per_window} сегментов.\n")
-        seg_format = ('{"segments":[{"start":<сек>,"end":<сек>,'
-                      '"reason":"...","score":<1-100>}]}')
-        max_note = f"Максимум {per_window} сегментов.\n"
-    else:
-        count_note = ""
-        seg_format = '{"segments":[{"start":<сек>,"end":<сек>,"reason":"..."}]}'
-        max_note = "Максимум 10 сегментов.\n"
+    seg_format = ('{"segments":[{"start":<сек>,"end":<сек>,"reason":"...",'
+                  '"score":<1-100>}],"heatmap":[{"t":<сек>,"s":<0-100>},...]}')
+    max_note = f"Максимум {per_window} сегментов.\n"
+    score_note = (
+        "У каждого сегмента указывай score — целое число 1..100, насколько "
+        "момент важен/интересен (100 — самый важный); при отборе самых "
+        "интересных учитывается score.\n")
+    heatmap_note = (
+        "Дополнительно верни поле heatmap — массив точек «интересности» по "
+        "времени фрагмента: {\"t\":<сек>,\"s\":<0-100>} через каждые 1-3 "
+        "секунды (для длинного фрагмента можно реже). s=0 — не интересно, "
+        "100 — максимально интересно; это данные для тепловой карты моментов.\n")
     instruction = (
         range_note +
         count_note +
+        heatmap_note +
+        score_note +
         "НЕ размышляй вслух и не пиши никаких пояснений.\n"
         'Ответь ТОЛЬКО одним JSON-объектом без markdown-ограждений (```) и без '
         'лишнего текста: ' + seg_format + '.\n'
-        "start/end — числа в секундах, в пределах фрагмента и всего видео. "
+        "start/end и t — числа в секундах, в пределах фрагмента и всего видео. "
         "Сегменты не пересекаются. " + max_note +
         speakers_note +
-        'Если интересных моментов нет — верни {"segments":[]}.'
+        'Если интересных моментов нет — верни {"segments":[],"heatmap":[]}.'
     )
     content: list[dict] = [{"type": "text", "text": instruction}]
 
@@ -384,9 +439,10 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
                 frame_step: int = DEFAULT_FRAME_STEP, source_fps: float = 30.0,
                 chunk_sec: float = 0.0, progress_cb=None,
                 start_index: int = 0, initial_segments: list[dict] | None = None,
+                initial_heatmap: list[dict] | None = None,
                 pause_event=None, cancel_event=None, pause_cb=None,
-                max_segments: int = 0) -> list[dict]:
-    """Анализирует видео через ИИ-API. Возвращает список сегментов.
+                max_segments: int = 0) -> tuple[list[dict], list[dict]]:
+    """Анализирует видео через ИИ-API. Возвращает (сегменты, точки heatmap).
 
     method: 'frames' | 'frames_speech' | 'speech'.
     frame_step — каждый N-й кадр. chunk_sec — длительность фрагмента видео,
@@ -396,10 +452,10 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
 
     Пауза/возобновление: между «частями» (окнами) ответов ИИ проверяется
     pause_event (threading.Event). Когда он установлен, вызывается
-    pause_cb(index, segments, total, pos_sec) — сохранение контрольной точки — и
-    поток ждёт, пока событие снимут (продолжить) или установят cancel_event
-    (отмена, AnalysisCancelled). start_index/initial_segments позволяют
-    продолжить анализ с ранее сохранённой контрольной точки.
+    pause_cb(index, segments, total, pos_sec, heat) — сохранение контрольной
+    точки — и поток ждёт, пока событие снимут (продолжить) или установят cancel_event
+    (отмена, AnalysisCancelled). start_index/initial_segments/initial_heatmap
+    позволяют продолжить анализ с ранее сохранённой контрольной точки.
 
     progress_cb вызывается как progress_cb(frac, pos_sec, seg_count): frac —
     доля окон, pos_sec — до какой секунды видео уже «просмотрено» (конец
@@ -417,6 +473,7 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
     total = max(len(windows), 1)
     start_index = max(0, min(int(start_index or 0), total))
     all_segments = list(initial_segments or [])
+    all_heat = list(initial_heatmap or [])
     sent_frames = 0
     i = start_index
     while i < total:
@@ -425,7 +482,7 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
             raise AnalysisCancelled("Анализ отменён пользователем")
         if pause_event is not None and pause_event.is_set():
             if pause_cb:
-                pause_cb(i, all_segments, total, windows[i][0])
+                pause_cb(i, all_segments, total, windows[i][0], all_heat)
             while pause_event.is_set():
                 if cancel_event is not None and cancel_event.is_set():
                     raise AnalysisCancelled("Анализ отменён пользователем")
@@ -460,6 +517,7 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
                 max_segments=max_segments)
             raw = _chat(endpoint, api_key, model, messages)
         all_segments += parse_segments(raw, duration)
+        all_heat += parse_heatmap(raw, duration)
         progress(min(0.99, (i + 1) / total),
                  w_end, len(all_segments))
         i += 1
@@ -478,16 +536,51 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
                               key=lambda s: s["start"])
 
     all_segments.sort(key=lambda s: s["start"])
-    return all_segments
+    return all_segments, all_heat
 
 
-def build_heatmap(segments: list[dict], duration: float, step: float = 0.5) -> list[dict]:
-    """Тепловая карта из ИИ-сегментов (внутри сегмента — 1.0, иначе 0)."""
+def build_heatmap(segments: list[dict], duration: float, step: float | None = None,
+                  heat_points: list[dict] | None = None) -> list[dict]:
+    """Тепловая карта «интересности» из данных ИИ-анализа.
+
+    Если модель вернула точки heatmap (heat_points) — они берутся за основу,
+    пробелы между ними дополняются значениями из сегментов. Иначе карта
+    строится из сегментов по score: внутри сегмента значение пропорционально
+    score (а не «1/0», как было раньше — поэтому карта выглядела «вкл/выкл»).
+    Шаг сетки — как у сигнального анализа: ~1 точка/сек, не больше ~1200.
+    """
+    if not duration or duration <= 0:
+        return []
+    if step is None:
+        step = max(0.5, duration / 1200.0)
+
+    def seg_val(seg: dict) -> float:
+        sc = float(seg.get("score") or 0.0)
+        if sc > 0:
+            return max(0.0, min(1.0, sc / 100.0))
+        return 0.6   # модель не указала score — заметный уровень
+
+    pts = sorted(heat_points or [], key=lambda p: p["t"])
     heat = []
     t = 0.0
+    pi = 0
     while t <= duration:
-        val = 1.0 if any(s["start"] <= t <= s["end"] for s in segments) else 0.0
-        heat.append({"t": round(t, 2), "s": round(val, 4)})
+        v = None
+        # Ищем точку ИИ рядом с t (в пределах шага).
+        while pi < len(pts) and pts[pi]["t"] < t - step:
+            pi += 1
+        j = pi
+        while j < len(pts) and pts[j]["t"] <= t + step:
+            if abs(pts[j]["t"] - t) <= step:
+                v = pts[j]["s"]
+                break
+            j += 1
+        if v is None:
+            for s in segments:
+                if s["start"] <= t <= s["end"]:
+                    v = seg_val(s)
+                    break
+        heat.append({"t": round(t, 2), "s": round(v if v is not None else 0.0, 4)})
         t += step
     return heat
 
@@ -528,28 +621,30 @@ def analyze_with_ai(path: str, *, endpoint: str, api_key: str | None, model: str
                     words: list[dict] | None = None,
                     progress_cb=None, start_index: int = 0,
                     initial_segments: list[dict] | None = None,
+                    initial_heatmap: list[dict] | None = None,
                     pause_event=None, cancel_event=None,
                     pause_cb=None, max_segments: int = 0) -> dict:
     """Полный ИИ-анализ видео — возвращает структуру как у analyzer.analyze.
 
     frame_step — каждый N-й кадр. chunk_sec — сколько секунд видео уходит за
     один запрос (отправка по частям, чтобы не переполнять контекст).
-    start_index/initial_segments/pause_event/cancel_event/pause_cb — поддержка
-    паузы/возобновления (см. api_analyze).
+    start_index/initial_segments/initial_heatmap/pause_event/cancel_event/
+    pause_cb — поддержка паузы/возобновления (см. api_analyze).
     Важно: API-ключ НЕ попадает в результат/options (и, соответственно, в кеш).
     """
     info = analyzer.probe_video(path)
     duration = info["duration"]
     source_fps = info.get("fps") or 30.0
-    segments = api_analyze(
+    segments, heat_points = api_analyze(
         path, endpoint=endpoint, api_key=api_key, model=model,
         system_prompt=system_prompt, method=method, duration=duration,
         words=words or [], frame_step=frame_step, source_fps=source_fps,
         chunk_sec=chunk_sec, progress_cb=progress_cb,
         start_index=start_index, initial_segments=initial_segments,
+        initial_heatmap=initial_heatmap,
         pause_event=pause_event, cancel_event=cancel_event,
         pause_cb=pause_cb, max_segments=max_segments)
-    heatmap = build_heatmap(segments, duration)
+    heatmap = build_heatmap(segments, duration, heat_points=heat_points)
     return {
         "info": info,
         "threshold": 0.0,

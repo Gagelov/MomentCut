@@ -568,6 +568,7 @@ def analyze_video(vid: str, req: AnalyzeRequest):
 
                 start_index = int(cp.get("window_index", 0)) if cp else 0
                 initial_segments = list(cp.get("segments") or []) if cp else []
+                initial_heatmap = list(cp.get("heatmap") or []) if cp else []
 
                 pause_event = threading.Event()
                 cancel_event = threading.Event()
@@ -584,7 +585,7 @@ def analyze_video(vid: str, req: AnalyzeRequest):
                                 message=f"ИИ-анализ: {int(frac * 100)}%",
                                 **extra)
 
-                def on_pause(idx, segs, total, pos_sec=None):
+                def on_pause(idx, segs, total, pos_sec=None, heat=None):
                     frac = (idx / total) if total else 0.0
                     pos = float(pos_sec) if pos_sec is not None else None
                     _save_ai_resume(vid, {
@@ -595,6 +596,7 @@ def analyze_video(vid: str, req: AnalyzeRequest):
                         "progress": frac,
                         "ai_pos": pos,
                         "segments": segs,
+                        "heatmap": heat or [],
                         "params": {
                             "endpoint": endpoint,
                             "model": model,
@@ -623,6 +625,7 @@ def analyze_video(vid: str, req: AnalyzeRequest):
                     progress_cb=cb,
                     start_index=start_index,
                     initial_segments=initial_segments,
+                    initial_heatmap=initial_heatmap,
                     pause_event=pause_event,
                     cancel_event=cancel_event,
                     pause_cb=on_pause,
@@ -633,7 +636,12 @@ def analyze_video(vid: str, req: AnalyzeRequest):
                 if (ai_merge and existing and existing.get("segments")):
                     merged = ai_analyzer.merge_with_existing(
                         existing.get("segments", []), result["segments"])
-                    result = {**result, "segments": merged,
+                    # Тепловую карту НЕ заменяем ИИ-шной «вкл/выкл»: у
+                    # сигнального анализа она непрерывная — оставляем её.
+                    heat = result.get("heatmap") or []
+                    if existing.get("heatmap"):
+                        heat = existing["heatmap"]
+                    result = {**result, "segments": merged, "heatmap": heat,
                               "options": {**result["options"], "source": "merged"}}
                 _drop_ai_resume(vid)
             else:
