@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MomentCut — монтаж интересных моментов</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<link rel="stylesheet" href="/static/css/style.css?v=24">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-logo">🎬</span>
+    <div class="brand-text">
+      <span class="brand-name">MomentCut</span>
+      <span class="brand-sub">умный монтаж интересных моментов</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btnSaveProject" title="Сохранить проект">💾</button>
+    <button class="btn ghost" id="btnLoadProject" title="Загрузить проект">📂</button>
+    <button class="btn ghost" id="btnDropHint" title="Как это работает">?</button>
+    <button class="btn primary" id="btnUpload">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Загрузить видео
+    </button>
+    <input type="file" id="fileInput" multiple accept="video/*" hidden>
+    <input type="file" id="projectFile" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- Левый сайдбар: список видео -->
+  <aside class="sidebar" id="sidebar">
+    <div class="panel-title">
+      <span>Видео <span id="videoCount" class="count"></span></span>
+      <button class="btn tiny sidebar-clean" id="btnCleanup"
+              title="Убрать все видео из библиотеки. Загруженные через UI удаляются вместе с данными/кешем; видео «с диска» убираются из списка, их файлы на диске остаются.">🧹 Очистить</button>
+    </div>
+    <div class="dropzone" id="dropzone">
+      <div class="dz-icon">📁</div>
+      <div class="dz-title">Перетащите видео сюда</div>
+      <div class="dz-sub">или нажмите «Загрузить видео»</div>
+    </div>
+    <div class="import-row">
+      <input type="text" id="importPath" placeholder="или путь к видео на диске…" spellcheck="false" autocomplete="off">
+      <button class="btn tiny" id="btnImport" title="Добавить видео по пути без копирования в папку приложения">📂 С диска</button>
+    </div>
+    <div class="video-list" id="videoList"></div>
+  </aside>
+
+  <!-- Центральная область -->
+  <section class="workspace">
+    <!-- Панель настроек анализа (видна всегда, в т.ч. до загрузки видео) -->
+    <div class="controls-bar" id="controlsBar">
+      <div class="ctrl-group">
+        <label class="ctrl-label" for="sensSlider">Строгость отбора</label>
+        <input type="range" id="sensSlider" min="0.2" max="2.5" step="0.05" value="1.0">
+        <span class="ctrl-value" id="sensValue">1.0</span>
+      </div>
+      <div class="ctrl-group ctrl-checks">
+        <label class="check"><input type="checkbox" id="useAudio" checked> 🔊 Аудио</label>
+        <label class="check"><input type="checkbox" id="useScene" checked> 🎞️ Сцены</label>
+        <label class="check"><input type="checkbox" id="useMotion" checked> 🏃 Движение</label>
+      </div>
+      <div class="ctrl-group">
+        <label class="ctrl-label" for="anEngineSelect">Анализ</label>
+        <select id="anEngineSelect" class="compact-select" title="Чем анализировать видео (декодирование кадров)">
+          <option value="auto" selected>Авто</option>
+          <option value="gpu">GPU</option>
+          <option value="cpu">CPU</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <label class="ctrl-label" for="methodSelect">Метод</label>
+        <select id="methodSelect" class="compact-select" title="Как искать интересные моменты: по сигналам (громкость/сцены/движение) или через ИИ (внешний OpenAI-совместимый API)">
+          <option value="signals" selected>Сигналы</option>
+          <option value="ai">ИИ</option>
+        </select>
+      </div>
+      <button class="btn secondary" id="btnReanalyze">↻ Пересчитать</button>
+      <div class="analysis-status" id="analysisStatus"></div>
+      <div class="ai-controls" id="aiControls" hidden>
+        <button class="btn tiny" id="btnAiPause" title="Приостановить ИИ-анализ между частями ответов ИИ (прогресс сохранится — можно продолжить, даже после перезапуска)">⏸ Пауза</button>
+        <button class="btn tiny success" id="btnAiResume" title="Продолжить ИИ-анализ с места паузы">▶ Продолжить</button>
+        <button class="btn tiny danger" id="btnAiStop" title="Отменить ИИ-анализ (сохранённая пауза удаляется)">⏹ Стоп</button>
+      </div>
+    </div>
+
+    <!-- Настройки ИИ-анализа (видимы при выборе «Метод: ИИ») -->
+    <div class="ai-settings" id="aiSettings" hidden>
+      <div class="ai-settings-title">🤖 ИИ-анализ (OpenAI-совместимый API)</div>
+      <div class="ai-settings-grid">
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiEndpoint">Endpoint chat/completions</label>
+          <input type="text" id="aiEndpoint" placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off"
+                 title="Базовый адрес API; /chat/completions добавится автоматически. Подходит: OpenAI, OpenRouter, Ollama (http://localhost:11434/v1), LM Studio">
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiKey">API-ключ (хранится только в браузере)</label>
+          <input type="password" id="aiKey" placeholder="sk-…" autocomplete="off">
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiModel">Модель</label>
+          <input type="text" id="aiModel" placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiInputSelect">Что отправляем ИИ</label>
+          <select id="aiInputSelect" title="Кадры — картинки с таймкодами. Кадры + речь — ещё и расшифровка (нужна распознанная речь). Только речь — по тексту без картинок.">
+            <option value="frames" selected>Кадры (vision)</option>
+            <option value="frames_speech">Кадры + речь</option>
+            <option value="speech">Только речь</option>
+          </select>
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiFrames">Каждый N-й кадр</label>
+          <input type="number" id="aiFrames" min="1" max="1000" step="1" value="10"
+                 title="Число трактуется буквально: написано 10 — уходит каждый 10-й кадр, 15 — каждый 15-й и т.д. Чем меньше число, тем плотнее выборка и выше качество, но больше кадров (токенов/стоимости).">
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiChunkSec">Секунд за раз</label>
+          <input type="number" id="aiChunkSec" min="1" max="3600" step="1" value="60"
+                 title="Видео обрабатывается по фрагментам: кадры первых N секунд отправляются в ИИ, ждём ответ, затем следующие N секунд. Так контекст модели не переполняется. Меньше значение — меньше кадров за запрос, но больше обращений к API.">
+        </div>
+        <div class="ctrl-group vertical">
+          <label class="ctrl-label" for="aiMaxSegments">Сколько моментов</label>
+          <input type="number" id="aiMaxSegments" min="0" max="100" step="1" value="0"
+                 title="Сколько всего интересных моментов нужно выбрать (0 — без ограничения). ИИ проставляют score каждому кандидату и оставит N самых важных по всему видео.">
+        </div>
+      </div>
+      <div class="ctrl-group vertical ai-prompt">
+        <label class="ctrl-label" for="aiSystemPrompt">Системный промпт (дополнение)</label>
+        <textarea id="aiSystemPrompt" rows="3" spellcheck="false"
+          placeholder="Дополните основной промпт: какие моменты считать интересными…"></textarea>
+        <span class="ctrl-hint">Основной промпт содержит только правила ответа. Сюда впишите, какие моменты искать (например: только сражения и стрельбу, голы, эмоции, важные реплики…).</span>
+        <span class="ctrl-hint" id="aiSpeechHint" hidden>⚠️ Для способа «Кадры + речь» / «Только речь» сначала распознайте речь кнопкой «🎙 Распознать речь».</span>
+      </div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🎞️</div>
+      <h2>Начните с загрузки видео</h2>
+      <p>MomentCut найдёт интересные моменты автоматически:<br>
+      громкие всплески, смену сцен и активное движение.</p>
+      <button class="btn primary big" id="btnUploadEmpty">Загрузить видео</button>
+    </div>
+
+    <div class="workspace-body" id="workspaceBody" hidden>
+      <!-- Плеер -->
+      <div class="player-area" id="playerArea">
+        <video id="player" controls preload="metadata"></video>
+        <div class="player-segment-badge" id="playerSegmentBadge" hidden></div>
+        <div class="subs-overlay" id="subsOverlay" hidden></div>
+        <div class="player-resize" id="playerResize" title="Потяните, чтобы изменить размер окна"></div>
+        <div class="speed-control" title="Скорость воспроизведения">
+          <select id="speedSelect">
+            <option value="0.3">0.3×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Таймлайн -->
+      <div class="timeline-wrap">
+        <div class="timeline-head">
+          <span class="tl-title">Таймлайн интересных моментов</span>
+          <div class="tl-controls">
+            <span class="ctrl-label">Масштаб</span>
+            <input type="range" id="zoomSlider" min="1" max="40" step="0.1" value="1" title="Приближение таймлайна (по позиции плеера)">
+            <button class="btn tiny" id="btnZoomReset" title="Показать весь ролик">⤢</button>
+          </div>
+          <span class="tl-meta" id="tlMeta"></span>
+        </div>
+        <div class="timeline" id="timeline">
+          <canvas id="timelineCanvas"></canvas>
+          <div class="segments-layer" id="segmentsLayer"></div>
+          <div class="playhead" id="playhead" hidden></div>
+        </div>
+        <div class="timeline-axis" id="timelineAxis"></div>
+      </div>
+
+      <!-- Список сегментов -->
+      <div class="segments-panel">
+        <div class="segments-head">
+          <span>Найденные моменты</span>
+          <div class="seg-actions">
+            <button class="btn tiny" id="btnAddSeg" title="Добавить сегмент вокруг текущего кадра">+ Кадр</button>
+            <button class="btn tiny" id="btnClearSegs" title="Убрать все сегменты">Очистить</button>
+          </div>
+        </div>
+        <div class="seg-filters" id="segFilters" hidden>
+          <label class="check src-chip alg-chip" title="Показывать моменты, найденные сигнальным анализом (громкость/сцены/движение)">
+            <input type="checkbox" id="showSignals" checked> 🔵 Алгоритм
+          </label>
+          <label class="check src-chip ai-chip" title="Показывать моменты, выбранные ИИ">
+            <input type="checkbox" id="showAi" checked> 🟣 ИИ
+          </label>
+        </div>
+        <div class="segments-list" id="segmentsList">
+          <div class="seg-empty" id="segEmpty">Анализ ещё не выполнен. Нажмите «Пересчитать».</div>
+        </div>
+      </div>
+
+      <!-- Поиск по словам -->
+      <div class="speech-panel" id="speechPanel" hidden>
+        <div class="speech-head">
+          <span>🔍 Поиск по словам</span>
+          <button class="btn tiny" id="btnTranscribe">🎙 Распознать речь</button>
+        </div>
+        <div class="speech-provider">
+          <label class="ctrl-label" for="speechProviderSelect">Источник распознавания</label>
+          <select id="speechProviderSelect" title="Локально — faster-whisper на вашем ПК. API — внешний OpenAI-совместимый сервис (свой endpoint и ключ).">
+            <option value="local">Локально (faster-whisper)</option>
+            <option value="api">Внешний API</option>
+          </select>
+        </div>
+        <div class="speech-model" id="speechModelRow">
+          <label class="ctrl-label" for="speechModelSelect">Модель распознавания</label>
+          <select id="speechModelSelect"
+            title="Чем больше модель, тем точнее распознавание, но медленнее и больше памяти. При смене модели предыдущая выгружается.">
+          </select>
+        </div>
+        <div class="speech-api-settings" id="speechApiSettings" hidden>
+          <input type="text" id="speechApiEndpoint" placeholder="Endpoint: https://…/v1/audio/transcriptions" spellcheck="false" autocomplete="off">
+          <input type="password" id="speechApiKey" placeholder="API-ключ" autocomplete="off">
+          <input type="text" id="speechApiModel" placeholder="Модель API (напр. whisper-1)" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="speech-diar" id="speechDiarBlock">
+          <label class="check" title="Разделять распознанную речь по голосам (кто говорит). Требует pyannote.audio и токена Hugging Face.">
+            <input type="checkbox" id="diarizeCheck"> 🎭 Разделять по голосам
+          </label>
+          <div class="speech-diar-settings" id="speechDiarSettings" hidden>
+            <input type="password" id="hfTokenInput" placeholder="Hugging Face токен (hf_…)" autocomplete="off" spellcheck="false">
+            <div class="speech-diar-counts">
+              <label class="ctrl-label">Спикеров: мин
+                <input type="number" id="minSpeakersInput" min="0" max="20" placeholder="авто" title="Минимум говорящих (0 = авто)">
+              </label>
+              <label class="ctrl-label">макс
+                <input type="number" id="maxSpeakersInput" min="0" max="20" placeholder="авто" title="Максимум говорящих (0 = авто)">
+              </label>
+            </div>
+          </div>
+          <div class="speech-diar-hint" id="speechDiarHint" hidden></div>
+        </div>
+        <label class="check subs-preview-toggle">
+          <input type="checkbox" id="previewSubsCheck" checked> 🎞️ Субтитры при просмотре
+        </label>
+        <div class="speech-search">
+          <input type="text" id="speechQuery" placeholder="Например: гол, прыжок, победа…" disabled>
+          <button class="btn tiny" id="btnSpeechSearch" disabled>Искать</button>
+        </div>
+        <div class="speech-status" id="speechStatus"></div>
+        <div class="speech-results" id="speechResults"></div>
+        <div class="speech-words-block" id="speechWordsBlock" hidden>
+          <div class="speech-words-head">
+            <span>Все слова</span>
+            <label class="check" title="Показать/скрыть список распознанных слов">
+              <input type="checkbox" id="showAllWordsCheck" checked> показать
+            </label>
+          </div>
+          <div class="speech-words" id="speechWords"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Правый сайдбар: монтаж -->
+  <aside class="montage-panel" id="montagePanel">
+    <div class="panel-title">Монтаж</div>
+
+    <div class="montage-summary">
+      <div class="ms-row"><span>Роликов в сборке</span><b id="msVideos">0</b></div>
+      <div class="ms-row"><span>Моментов</span><b id="msSegments">0</b></div>
+      <div class="ms-row"><span>Итоговая длительность</span><b id="msDuration">0:00</b></div>
+    </div>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="resSelect">Разрешение</label>
+      <select id="resSelect">
+        <option value="0">Авто (максимальное)</option>
+        <option value="2160">2160p (4K)</option>
+        <option value="1440">1440p (QHD)</option>
+        <option value="1080">1080p (Full HD)</option>
+        <option value="720">720p (HD)</option>
+        <option value="480">480p</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="engineSelect">Движок обработки</label>
+      <select id="engineSelect">
+        <option value="auto" selected>Гибрид (авто)</option>
+        <option value="cpu">CPU (программный)</option>
+        <option value="nvidia">NVIDIA (NVENC)</option>
+        <option value="amd">AMD (AMF)</option>
+        <option value="intel">Intel (QSV)</option>
+      </select>
+      <span class="ctrl-hint" id="engineHint"></span>
+    </div>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="fmtSelect">Формат экспорта</label>
+      <select id="fmtSelect">
+        <option value="mp4">MP4 (H.264)</option>
+        <option value="hevc">MP4 (HEVC H.265)</option>
+        <option value="webm">WebM (VP9)</option>
+        <option value="mkv">MKV (H.264)</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="transitionSelect">Переход между моментами</label>
+      <select id="transitionSelect" title="Что вставить между частями. «Плашка-маркер» вставляет цветной кадр между моментами — удобно находить и вырезать их в другом редакторе.">
+        <option value="none" selected>Без перехода</option>
+        <option value="fade">Кроссфейд (fade)</option>
+        <option value="fadeblack">Через чёрный</option>
+        <option value="fadewhite">Через белый</option>
+        <option value="dissolve">Растворение</option>
+        <option value="wipeleft">Шторка влево</option>
+        <option value="slideright">Сдвиг вправо</option>
+        <option value="marker">Плашка-маркер (вставка)</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="xfadeSelect">Длительность перехода</label>
+      <select id="xfadeSelect" title="Сколько секунд длится переход (для плашки-маркера — длительность цветного кадра)">
+        <option value="0.3">0.3 с</option>
+        <option value="0.5">0.5 с</option>
+        <option value="1" selected>1 с</option>
+        <option value="2">2 с</option>
+        <option value="3">3 с</option>
+      </select>
+    </div>
+
+    <div class="ctrl-group vertical" id="markerColorRow" hidden>
+      <label class="ctrl-label" for="markerColor">Цвет плашки</label>
+      <input type="color" id="markerColor" value="#ff00ff" title="Цвет вставки-маркера между моментами">
+    </div>
+
+    <label class="check" title="Вписать субтитры по распознанной речи прямо в видео">
+      <input type="checkbox" id="subsCheck"> 🎞️ Субтитры (речь)
+    </label>
+
+    <div class="ctrl-group vertical">
+      <label class="ctrl-label" for="crfSlider">Качество: CRF <span id="crfValue">20</span></label>
+      <input type="range" id="crfSlider" min="16" max="30" step="1" value="20" title="Ниже = лучше качество, больше размер">
+      <span class="ctrl-hint">Чем ниже CRF, тем качественнее и тяжелее файл</span>
+    </div>
+
+    <div class="montage-queue" id="montageQueue">
+      <div class="mq-empty">Включите моменты в сборку — отмечайте их галочками в списке.</div>
+    </div>
+
+    <button class="btn primary wide" id="btnMontage" disabled>
+      ✂️ Смонтировать
+    </button>
+
+    <div class="job-progress" id="jobProgress" hidden>
+      <div class="jp-label" id="jobLabel"></div>
+      <div class="jp-bar"><div class="jp-fill" id="jobFill"></div></div>
+      <div class="jp-text" id="jobText">0%</div>
+    </div>
+
+    <div class="montage-result" id="montageResult" hidden>
+      <div class="mr-title">Готово! 🎉</div>
+      <div class="mr-meta" id="mrMeta"></div>
+      <a class="btn success wide" id="btnDownload" download>⬇ Скачать видео</a>
+    </div>
+  </aside>
+</main>
+
+<!-- Модальное окно справки: раскрывающиеся вкладки -->
+<div class="modal-backdrop" id="helpModal" hidden>
+  <div class="modal modal-help">
+    <div class="modal-head"><h3>Справка MomentCut</h3><button class="modal-close" id="helpClose">✕</button></div>
+    <div class="modal-body">
+      <div class="help-tabs">
+
+        <details class="help-tab" open>
+          <summary>🚀 Быстрый старт</summary>
+          <ol>
+            <li><b>Загрузите</b> видео — кнопкой «Загрузить видео», перетащив файлы в окно, или полем «С диска» (по пути, без копирования).</li>
+            <li>Начнётся <b>автоматический анализ</b> (по умолчанию «Сигналы»). Прогресс виден в панели анализа.</li>
+            <li>Откройте найденные моменты на <b>таймлайне</b> — клик по сегменту воспроизводит его в плеере.</li>
+            <li>Включите нужные моменты в правой панели «Монтаж» и нажмите <b>«✂️ Смонтировать»</b>.</li>
+            <li>Скачайте готовый ролик кнопкой <b>«⬇ Скачать видео»</b>.</li>
+          </ol>
+        </details>
+
+        <details class="help-tab">
+          <summary>📥 Загрузка, импорт и библиотека</summary>
+          <ul>
+            <li>Поддерживаются форматы: MP4, MOV, MKV, AVI, WebM, M4V, TS, FLV, WMV, MPG, MPEG, 3GP.</li>
+            <li><b>Импорт «с диска»</b> — впишите путь к файлу и нажмите «📂 С диска»: видео не копируется, читается прямо по пути (бейдж «с диска»). При удалении такой записи исходник на диске сохраняется.</li>
+            <li>Загруженные видео, их анализ и распознанная речь <b>сохраняются в кеше</b> (<code>data/cache/</code>) и восстанавливаются после перезапуска сервера.</li>
+            <li>Кнопка <b>«🧹 Очистить»</b> убирает из библиотеки все видео: загруженные — вместе с файлами, «с диска» — только записи.</li>
+            <li>Кнопка <b>«⌫»</b> у видео в списке очищает его найденные моменты.</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>🧠 Анализ моментов (сигналы)</summary>
+          <p>Ищет интересные моменты по трём сигналам:</p>
+          <ul>
+            <li>🔊 <b>аудиоэнергия</b> — крики, аплодисменты, музыкальные всплески;</li>
+            <li>🎞️ <b>смена сцен</b> — нарезка и контрастные переходы;</li>
+            <li>🏃 <b>движение</b> — активные/динамичные сцены.</li>
+          </ul>
+          <p>Движок: <b>Авто / GPU (NVDEC) / CPU</b> — результаты одинаковые, на GPU анализ быстрее. <b>Строгость отбора</b> задаёт порог: выше — меньше, но «интереснее» моментов. Кнопка «↻ Пересчитать» запускает анализ заново.</p>
+        </details>
+
+        <details class="help-tab">
+          <summary>🤖 ИИ-анализ</summary>
+          <p>В панели анализа выберите <b>Метод: ИИ</b> — моменты ищет внешняя модель через OpenAI-совместимый API (OpenAI, OpenRouter, Ollama, LM Studio…).</p>
+          <ul>
+            <li><b>Endpoint</b> — адрес API (базовый; <code>/chat/completions</code> добавится автоматически), <b>API-ключ</b> и <b>модель</b>.</li>
+            <li><b>Что отправляем</b>: кадры (каждый N-й), кадры + распознанная речь, или только речь.</li>
+            <li><b>Секунд за раз</b> — видео обрабатывается по фрагментам, чтобы не переполнять контекст модели.</li>
+            <li><b>Системный промпт (дополнение)</b> — сюда впишите, какие моменты считать интересными (базовые правила уже встроены).</li>
+            <li><b>Сколько моментов</b> — ограничение числа итоговых моментов (0 = без лимита).</li>
+            <li>Поддерживается <b>пауза/продолжение/стоп</b> — прогресс сохраняется и после перезапуска.</li>
+            <li>Если сигнальный анализ уже есть, ИИ-моменты <b>дополняют</b> его. Фильтры «🔵 Алгоритм» / «🟣 ИИ» включают/выключают источники.</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>✏️ Таймлайн и редактирование</summary>
+          <ul>
+            <li><b>Зум</b>: ползунок «Масштаб» (до ×40) и колёсико мыши над таймлайном (центрируется под курсором); «⤢» — показать весь ролик.</li>
+            <li><b>Границы</b> сегментов можно двигать и растягивать прямо на таймлайне; время редактируется и в списке.</li>
+            <li><b>Галочки</b> в списке найденных и в очереди монтажа включают/выключают момент без удаления.</li>
+            <li><b>«+ Кадр»</b> добавляет момент вокруг текущей позиции плеера; <b>«Очистить»</b> убирает все моменты.</li>
+            <li><b>«⬇»</b> у сегмента скачивает его отдельным файлом с текущими настройками экспорта.</li>
+            <li>Окно плеера растягивается за нижнюю ручку; скорость воспроизведения — 0.3×–4×.</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>🗣 Распознавание речи и поиск</summary>
+          <p>Кнопка <b>«🎙 Распознать речь»</b> в панели «Поиск по словам»:</p>
+          <ul>
+            <li><b>Локально</b> — faster-whisper на вашем ПК (модели tiny…large-v3; при смене модели предыдущая выгружается). При наличии NVIDIA GPU речь распознаётся на видеокарте.</li>
+            <li><b>Внешний API</b> — свой OpenAI-совместимый endpoint <code>/audio/transcriptions</code>, ключ и модель (настройки хранятся в браузере).</li>
+            <li>После распознавания слова появляются <b>метками на таймлайне</b> (наведение — слово и время, клик — перемотка), а в панели — <b>поиск по словам</b> и список всех слов.</li>
+            <li>Найденный фрагмент добавляется в монтаж кнопкой <b>«＋»</b>.</li>
+            <li>Чекбокс <b>«Субтитры при просмотре»</b> показывает распознанную речь поверх видео в плеере.</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>🎭 Разделение по голосам (диаризация)</summary>
+          <ul>
+            <li>Включите <b>«🎭 Разделять по голосам»</b> перед распознаванием — реплики разных говорящих получат метки «Спикер 1…», цвета на таймлайне и префиксы в субтитрах.</li>
+            <li>Требуется <b>токен Hugging Face</b> (поле рядом; хранится только в браузере) и <b>pyannote.audio</b> (есть в requirements.txt).</li>
+            <li>Первый запуск скачивает закрытые модели с Hugging Face — нужно принять условия (см. README, шаг 5).</li>
+            <li>При наличии NVIDIA GPU диаризация ускоряется CUDA-сборкой torch (см. README).</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>✂️ Монтаж и экспорт</summary>
+          <ul>
+            <li><b>Разрешение</b>: авто (максимальное) или фиксированное от 480p до 4K.</li>
+            <li><b>Движок</b>: Гибрид (авто) / CPU / NVIDIA (NVENC) / AMD (AMF) / Intel (QSV). Если аппаратный кодер недоступен — автоматический фолбэк на CPU.</li>
+            <li><b>Формат</b>: MP4 (H.264), MP4 (HEVC), WebM (VP9), MKV. <b>Качество</b> — CRF: ниже = лучше и тяжелее.</li>
+            <li><b>Переход</b> между моментами: без перехода, кроссфейд, через чёрный/белый, растворение, шторка влево, сдвиг вправо или <b>плашка-маркер</b> (цветная вставка — удобно вырезать моменты в другом редакторе). Длительность — 0.3–3 с.</li>
+            <li><b>Субтитры (речь)</b> — вшивают распознанную речь прямо в кадр (кириллица поддерживается). Требуется предварительное распознавание.</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>💾 Проекты</summary>
+          <ul>
+            <li>Кнопка <b>«💾»</b> в верхней панели сохраняет проект в JSON (видео, моменты, распознанную речь), <b>«📂»</b> — загружает его.</li>
+            <li>Проект ссылается на файлы в <code>data/uploads/</code> — для переноса на другой компьютер перенесите и эти файлы (или добавьте видео «с диска» по пути).</li>
+          </ul>
+        </details>
+
+        <details class="help-tab">
+          <summary>🔒 Приватность</summary>
+          <p>Сигнальный анализ и локальное распознавание речи выполняются <b>на вашем компьютере</b>; видео не отправляются никуда. В интернет уходят только:</p>
+          <ul>
+            <li>запросы к указанным вами API (ИИ-анализ, внешнее распознавание);</li>
+            <li>скачивание моделей (whisper, диаризация) при первом запуске.</li>
+          </ul>
+          <p>API-ключи и токен Hugging Face хранятся <b>только в браузере</b> (localStorage) и передаются на сервер лишь на время запроса — в кеш и проекты они не попадают.</p>
+        </details>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script type="module" src="/static/js/app.js?v=33"></script>
+</body>
+</html>

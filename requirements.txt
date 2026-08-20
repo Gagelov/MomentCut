@@ -1,0 +1,51 @@
+# ============================================================
+# MomentCut — зависимости Python (Windows 10/11, Python 3.12+)
+# ------------------------------------------------------------
+# Установка (из корня проекта, внутри виртуального окружения):
+#   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# Полная пошаговая инструкция — в файле README.md.
+# ============================================================
+
+# --- Веб-сервер (FastAPI + Uvicorn) ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# --- Обработка видео и анализ «интересности» ---
+numpy>=1.26
+opencv-python-headless>=4.9
+
+# --- Распознавание речи локально (faster-whisper, модели tiny…large-v3) ---
+# Модели скачиваются с Hugging Face при первом запуске (нужен интернет).
+faster-whisper>=1.0
+
+# --- HTTP-клиент (ИИ-анализ и распознавание речи через внешний OpenAI-совместимый API) ---
+httpx>=0.27
+
+# --- Чтение аудио для диаризации (soundfile читает wav после извлечения ffmpeg-ом) ---
+soundfile>=0.12
+
+# --- CUDA-библиотеки для ускорения распознавания речи на NVIDIA GPU ---
+# Не требуют установки CUDA Toolkit: pip кладёт DLL в .venv\Lib\site-packages\nvidia\*\bin.
+# Чтобы ctranslate2 их увидел, эти bin-папки должны быть в PATH (см. README, раздел
+# «CUDA для распознавания речи»). Без NVIDIA GPU можно не ставить — речь пойдёт на CPU.
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+nvidia-cuda-runtime-cu12
+nvidia-cuda-nvrtc-cu12
+
+# --- Диаризация (разделение речи по голосам): pyannote.audio + torch ---
+# Тяжёлая зависимость — автоматически скачает torch (на Windows с PyPI это CPU-сборка).
+# Для работы на GPU установите torch/torchaudio с CUDA-индексом ДО pyannote (см. ниже).
+# Требуется токен Hugging Face (hf_…) и принятые условия закрытых моделей
+# pyannote/speaker-diarization-3.1 (подробно — в README).
+pyannote.audio>=4.0
+
+# --- (Опционально, для GPU-диаризации) torch с поддержкой CUDA ---
+# На Windows пакет torch с PyPI — CPU-сборка. Для ускорения на видеокарте
+# установите CUDA-версию (пример для CUDA 12.6, драйвер 610+):
+#   .\.venv\Scripts\python.exe -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+# После этого обязательно удалите старые CPU-пакеты torch/torchaudio (они могли
+# остаться в site-packages, если сервер был запущен и заблокировал DLL):
+#   .\.venv\Scripts\python.exe -m pip uninstall torch torchaudio
