@@ -1,110 +1,177 @@
-Business Source License 1.1
+# Elastic License 2.0 (ELv2) — адаптировано для MomentCut
 
-License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
-"Business Source License" is a trademark of MariaDB Corporation Ab.
+Основано на **Elastic License 2.0 (ELv2)**: https://www.elastic.co/licensing/elastic-license
 
------------------------------------------------------------------------------
+Разделы 1–6 ниже дополняют и уточняют условия ELv2 применительно к этому
+проекту. В части, не урегулированной этими разделами, действуют условия
+Elastic License 2.0.
 
-Параметры
+---
 
-Правообладатель (Licensor):        Gagelov
-                                   gagelov838@gmail.com
+## 1. Общие положения
 
-Лицензируемая работа (Licensed Work): MomentCut — умный монтаж интересных
-                                   моментов (веб-приложение для автоматического
-                                   поиска интересных моментов в видео и сборки
-                                   из них готового ролика).
-                                   The Licensed Work is (c) 2026 Gagelov.
-                                   All Rights Reserved.
+- **Правообладатель (Licensor):** Gagelov (gagelov838@gmail.com)
+- **Лицензируемая работа (Licensed Work):** MomentCut — веб-приложение для
+  автоматического поиска интересных моментов в видео и сборки из них готового
+  ролика. © 2026 Gagelov. Все права защищены.
+- **Базовая лицензия:** Elastic License 2.0 (ELv2).
+- Принимая, используя или распространяя ПО, вы соглашаетесь с условиями
+  настоящей лицензии.
 
-Дополнительное разрешение (Additional Use Grant):
-                                   Разрешено производственное использование
-                                   в соответствии с «Дополнительными условиями»
-                                   (см. раздел ниже).
+---
 
-Дата изменения (Change Date):      2030-08-20
+## 2. Что РАЗРЕШЕНО делать с кодом
 
-Лицензия после изменения (Change License):
-                                   Apache License 2.0
+✅ **Просматривать и изучать код** для любых целей.
 
------------------------------------------------------------------------------
+✅ **Использовать ПО для личных нужд** (домашнее использование, обучение, хобби).
 
-Terms
+✅ **Модифицировать код** для собственных нужд.
 
-The Licensor hereby grants you the right to copy, modify, create derivative
-works, redistribute, and make non-production use of the Licensed Work. The
-Licensor may make an Additional Use Grant, above, permitting limited
-production use.
+✅ **Использовать ПО в коммерческой деятельности**, если вы создаете **конечный
+продукт** (видео, аудио, анимацию) и продаете именно **этот результат**, а не
+само ПО.
 
-Effective on the Change Date, or the fourth anniversary of the first
-publicly available version of a given version of the Licensed Work
-whichever comes first, the Licensor hereby grants you rights under the
-terms of the Change License, and the rights under the Additional Use Grant
-(if any) shall terminate.
+✅ **Распространять модифицированные версии ПО**, но только при условии, что вы:
 
-You may make non-production use of the Licensed Work, subject to the
-Additional Use Grant (if any), and this license, including the limitations
-on use contained herein. The Additional Use Grant (if any) may contain
-additional terms which may limit the rights granted under this license.
+- Указываете авторство (сохраняете имя автора в коде).
+- Предоставляете получателям копию этой лицензии.
+- Не взимаете плату за само ПО.
 
-The following restrictions apply to the use of the Licensed Work:
+---
 
-1. You may not provide the Licensed Work to third parties on a hosted or
-   embedded basis in order to compete with the Licensor's own version(s)
-   of the Licensed Work, unless you have entered into a separate agreement
-   with the Licensor.
-2. You may not alter, remove, or suppress any notices in or on the
-   Licensed Work, including any notices of either the Licensor's or any
-   contributor's intellectual property rights.
-3. You may not use the Licensed Work for purposes that are prohibited by
-   law.
+## 3. Что ЗАПРЕЩЕНО делать с кодом
 
-You are solely responsible for determining the appropriateness of using
-the Licensed Work and assume any risks associated with Your exercise of
-permissions under this license.
+❌ **Продавать оригинальное ПО или его копии** как самостоятельный продукт
+(например, выложить в магазин приложений за деньги).
 
-The Licensor provides the Licensed Work on an "AS IS" BASIS, WITHOUT
-WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including,
-without limitation, any warranties or conditions of TITLE, NON-
-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are
-solely responsible for determining the appropriateness of using the
-Licensed Work and assume any risks associated with Your exercise of
-permissions under this license.
+❌ **Предоставлять ПО как услугу (SaaS)** — запускать облачный сервис, где
+пользователи платят за доступ к функциональности вашего ПО (например, «монтаж
+в облаке за 1000 руб/мес»).
 
-The Licensor has no obligation to provide support, updates, or upgrades
-for the Licensed Work, except as required by law.
+❌ **Использовать код для создания конкурирующего платного приложения** для
+монтажа видео с целью его продажи или сдачи в аренду.
 
-In no event shall the Licensor be liable to You for any damages arising
-from or in connection with the use of the Licensed Work, whether in an
-action of contract, tort, or otherwise, unless required by applicable law
-or agreed to in writing.
+❌ **Удалять или скрывать уведомления об авторских правах** и текст этой лицензии.
 
-Notwithstanding any other provision of this license, if any provision of
-this license is held to be invalid, illegal, or unenforceable, the
-remaining provisions shall continue in full force and effect.
+❌ **Обходить механизмы лицензирования**.
 
------------------------------------------------------------------------------
+---
 
-Дополнительные условия (Additional Use Grant)
+## 4. Особое разрешение для создания видео
 
-Этот проект распространяется под Business Source License 1.1 с
-дополнительными условиями.
+**НЕСМОТРЯ НА пункт 3**, вы можете:
 
-- Бесплатно: для личного, образовательного и научного использования.
-- Бесплатно: если ваш продукт добавляет значительную ценность сверх
-  моего кода (вы создали своё приложение, а мой код — только
-  вспомогательная библиотека).
-- Платно: если вы продаёте мой код как есть, сдаёте его в аренду или
-  предоставляете как готовый SaaS-сервис.
-- Платно: если вы используете мой код в коммерческом продукте как его
-  основную функциональность.
+✅ Брать деньги за **видео, смонтированные с помощью этого ПО**, включая:
 
-Для коммерческой лицензии пишите: gagelov838@gmail.com
+- Рекламные ролики для клиентов.
+- Свадебные и корпоративные фильмы.
+- YouTube-контент с монетизацией.
+- Любой другой конечный медиапродукт.
 
------------------------------------------------------------------------------
+Это разрешение действует **бесплатно** и **без необходимости** покупать
+коммерческую лицензию.
 
-Notice
+---
 
-The Business Source License (this document, or the "License") is not an
-Open Source license. However, the Licensed Work will eventually be made
-available under an Open Source License, as stated in this License.
+## 5. Ответственность
+
+ПО предоставляется «как есть», без каких-либо гарантий. Автор не несет
+ответственности за убытки, возникшие в результате использования ПО.
+
+---
+
+## 6. Срок действия
+
+Эта лицензия действует бессрочно. Автор не может отозвать её задним числом,
+но может выпустить новую версию ПО под другой лицензией.
+
+---
+
+# English Version / Elastic License 2.0 (ELv2) — adapted for MomentCut
+
+Based on **Elastic License 2.0 (ELv2)**: https://www.elastic.co/licensing/elastic-license
+
+Sections 1–6 below supplement and clarify the terms of the ELv2 as applied to
+this project. To the extent not covered by these sections, the terms of the
+Elastic License 2.0 apply.
+
+---
+
+## 1. General Provisions
+
+- **Licensor:** Gagelov (gagelov838@gmail.com)
+- **Licensed Work:** MomentCut — a web application for automatically finding
+  interesting moments in video and assembling them into a finished video.
+  © 2026 Gagelov. All rights reserved.
+- **Base License:** Elastic License 2.0 (ELv2).
+- By accepting, using, or distributing the Software, you agree to the terms
+  of this license.
+
+---
+
+## 2. What you MAY do with the code
+
+✅ **View and study the code** for any purpose.
+
+✅ **Use the Software for personal needs** (home use, education, hobbies).
+
+✅ **Modify the code** for your own needs.
+
+✅ **Use the Software in commercial activity**, provided you create a **final
+product** (video, audio, animation) and sell that **result**, not the Software
+itself.
+
+✅ **Distribute modified versions of the Software**, provided that you:
+
+- Give credit (keep the author's name in the code).
+- Provide recipients with a copy of this license.
+- Do not charge for the Software itself.
+
+---
+
+## 3. What you MAY NOT do with the code
+
+❌ **Sell the original Software or its copies** as a standalone product
+(for example, publish it to an app store for money).
+
+❌ **Provide the Software as a service (SaaS)** — run a cloud service where
+users pay for access to the Software's functionality (e.g., "video editing
+in the cloud for 1000 RUB/month").
+
+❌ **Use the code to create a competing paid application** for video editing
+with the purpose of selling or renting it out.
+
+❌ **Remove or hide copyright notices** and the text of this license.
+
+❌ **Circumvent licensing mechanisms**.
+
+---
+
+## 4. Special Permission for Creating Videos
+
+**NOTWITHSTANDING Section 3**, you may:
+
+✅ Charge money for **videos edited with this Software**, including:
+
+- Commercials for clients.
+- Wedding and corporate films.
+- Monetized YouTube content.
+- Any other final media product.
+
+This permission is **free of charge** and **without the need** to purchase a
+commercial license.
+
+---
+
+## 5. Disclaimer
+
+The Software is provided "as is", without any warranties. The author is not
+liable for any damages arising from the use of the Software.
+
+---
+
+## 6. Term
+
+This license is perpetual. The author cannot revoke it retroactively, but may
+release a new version of the Software under a different license.
