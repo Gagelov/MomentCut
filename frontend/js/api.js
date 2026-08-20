@@ -1,9 +1,10 @@
 // Клиент для REST API бэкенда
+import { t } from './i18n.js?v=2';
 
 async function req(path, opts = {}) {
   const res = await fetch(path, opts);
   if (!res.ok) {
-    let msg = `Ошибка ${res.status}`;
+    let msg = t('err_status', { status: res.status });
     try {
       const j = await res.json();
       msg = j.detail || j.error || msg;
@@ -26,14 +27,14 @@ export const API = {
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try { resolve(JSON.parse(xhr.responseText)); }
-          catch (e) { reject(new Error('Некорректный ответ сервера')); }
+          catch (e) { reject(new Error(t('err_bad_response'))); }
         } else {
           let msg = xhr.responseText;
           try { msg = JSON.parse(xhr.responseText).detail || msg; } catch { /* ignore */ }
           reject(new Error(msg));
         }
       };
-      xhr.onerror = () => reject(new Error('Сетевая ошибка при загрузке'));
+      xhr.onerror = () => reject(new Error(t('err_network_upload')));
       xhr.send(form);
     });
   },

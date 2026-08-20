@@ -1,4 +1,5 @@
 // Вспомогательные функции
+import { t } from './i18n.js?v=2';
 
 export function formatTime(seconds, withHundredths = false) {
   if (!isFinite(seconds) || seconds < 0) seconds = 0;
@@ -24,8 +25,8 @@ export function parseTime(str) {
 }
 
 export function formatSize(bytes) {
-  if (!isFinite(bytes) || bytes <= 0) return '0 Б';
-  const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+  if (!isFinite(bytes) || bytes <= 0) return `0 ${t('unit_b')}`;
+  const units = [t('unit_b'), t('unit_kb'), t('unit_mb'), t('unit_gb')];
   let i = 0;
   let v = bytes;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }

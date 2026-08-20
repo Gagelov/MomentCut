@@ -1,5 +1,6 @@
 // Интерактивный таймлайн: тепловая карта интересности + редактируемые сегменты.
 import { formatTime, speakerColor } from './utils.js';
+import { t } from './i18n.js?v=2';
 
 export class Timeline {
   constructor(opts) {
@@ -219,7 +220,7 @@ export class Timeline {
       }
     } else {
       ctx.fillStyle = 'rgba(34, 211, 238, 0.85)';
-      ctx.fillText('▍слова', 3, H - 6);
+      ctx.fillText(t('tl_words'), 3, H - 6);
     }
   }
 
@@ -269,9 +270,9 @@ export class Timeline {
     if (this.duration > 0 && this.heat.length) {
       this._drawHeat(W, H);
     } else if (this.duration > 0) {
-      this._drawPlaceholder(W, H, 'Нет данных анализа');
+      this._drawPlaceholder(W, H, t('tl_no_data'));
     } else {
-      this._drawPlaceholder(W, H, 'Выполните анализ, чтобы увидеть интересные моменты');
+      this._drawPlaceholder(W, H, t('tl_do_analysis'));
     }
 
     if (this.words.length) this._drawWords(W, H);

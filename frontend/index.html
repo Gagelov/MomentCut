@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MomentCut — монтаж интересных моментов</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
-<link rel="stylesheet" href="/static/css/style.css?v=24">
+<link rel="stylesheet" href="/static/css/style.css?v=25">
 </head>
 <body>
 
@@ -14,16 +14,22 @@
     <span class="brand-logo">🎬</span>
     <div class="brand-text">
       <span class="brand-name">MomentCut</span>
-      <span class="brand-sub">умный монтаж интересных моментов</span>
+      <span class="brand-sub" data-i18n="brand_sub">умный монтаж интересных моментов</span>
     </div>
   </div>
+  <div class="lang-switch" data-i18n-title="lang_switch_title">
+    <select id="langSelect" aria-label="Language">
+      <option value="ru">Русский</option>
+      <option value="en">English</option>
+    </select>
+  </div>
   <div class="topbar-actions">
-    <button class="btn ghost" id="btnSaveProject" title="Сохранить проект">💾</button>
-    <button class="btn ghost" id="btnLoadProject" title="Загрузить проект">📂</button>
-    <button class="btn ghost" id="btnDropHint" title="Как это работает">?</button>
+    <button class="btn ghost" id="btnSaveProject" data-i18n-title="save_project" title="Сохранить проект">💾</button>
+    <button class="btn ghost" id="btnLoadProject" data-i18n-title="load_project" title="Загрузить проект">📂</button>
+    <button class="btn ghost" id="btnDropHint" data-i18n-title="how_it_works" title="Как это работает">?</button>
     <button class="btn primary" id="btnUpload">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Загрузить видео
+      <span data-i18n="upload_video">Загрузить видео</span>
     </button>
     <input type="file" id="fileInput" multiple accept="video/*" hidden>
     <input type="file" id="projectFile" accept=".json,application/json" hidden>
@@ -35,18 +41,19 @@
   <!-- Левый сайдбар: список видео -->
   <aside class="sidebar" id="sidebar">
     <div class="panel-title">
-      <span>Видео <span id="videoCount" class="count"></span></span>
+      <span><span data-i18n="videos_title">Видео</span> <span id="videoCount" class="count"></span></span>
       <button class="btn tiny sidebar-clean" id="btnCleanup"
-              title="Убрать все видео из библиотеки. Загруженные через UI удаляются вместе с данными/кешем; видео «с диска» убираются из списка, их файлы на диске остаются.">🧹 Очистить</button>
+              data-i18n-title="cleanup_title"
+              title="Убрать все видео из библиотеки. Загруженные через UI удаляются вместе с данными/кешем; видео «с диска» убираются из списка, их файлы на диске остаются."><span data-i18n="cleanup">🧹 Очистить</span></button>
     </div>
     <div class="dropzone" id="dropzone">
       <div class="dz-icon">📁</div>
-      <div class="dz-title">Перетащите видео сюда</div>
-      <div class="dz-sub">или нажмите «Загрузить видео»</div>
+      <div class="dz-title" data-i18n="dropzone_title">Перетащите видео сюда</div>
+      <div class="dz-sub" data-i18n="dropzone_sub">или нажмите «Загрузить видео»</div>
     </div>
     <div class="import-row">
-      <input type="text" id="importPath" placeholder="или путь к видео на диске…" spellcheck="false" autocomplete="off">
-      <button class="btn tiny" id="btnImport" title="Добавить видео по пути без копирования в папку приложения">📂 С диска</button>
+      <input type="text" id="importPath" data-i18n-placeholder="import_path_ph" placeholder="или путь к видео на диске…" spellcheck="false" autocomplete="off">
+      <button class="btn tiny" id="btnImport" data-i18n-title="import_disk_title" title="Добавить видео по пути без копирования в папку приложения"><span data-i18n="import_disk">📂 С диска</span></button>
     </div>
     <div class="video-list" id="videoList"></div>
   </aside>
@@ -56,95 +63,100 @@
     <!-- Панель настроек анализа (видна всегда, в т.ч. до загрузки видео) -->
     <div class="controls-bar" id="controlsBar">
       <div class="ctrl-group">
-        <label class="ctrl-label" for="sensSlider">Строгость отбора</label>
+        <label class="ctrl-label" for="sensSlider" data-i18n="sensitivity">Строгость отбора</label>
         <input type="range" id="sensSlider" min="0.2" max="2.5" step="0.05" value="1.0">
         <span class="ctrl-value" id="sensValue">1.0</span>
       </div>
       <div class="ctrl-group ctrl-checks">
-        <label class="check"><input type="checkbox" id="useAudio" checked> 🔊 Аудио</label>
-        <label class="check"><input type="checkbox" id="useScene" checked> 🎞️ Сцены</label>
-        <label class="check"><input type="checkbox" id="useMotion" checked> 🏃 Движение</label>
+        <label class="check"><input type="checkbox" id="useAudio" checked> <span data-i18n="audio">🔊 Аудио</span></label>
+        <label class="check"><input type="checkbox" id="useScene" checked> <span data-i18n="scenes">🎞️ Сцены</span></label>
+        <label class="check"><input type="checkbox" id="useMotion" checked> <span data-i18n="motion">🏃 Движение</span></label>
       </div>
       <div class="ctrl-group">
-        <label class="ctrl-label" for="anEngineSelect">Анализ</label>
-        <select id="anEngineSelect" class="compact-select" title="Чем анализировать видео (декодирование кадров)">
-          <option value="auto" selected>Авто</option>
-          <option value="gpu">GPU</option>
-          <option value="cpu">CPU</option>
+        <label class="ctrl-label" for="anEngineSelect" data-i18n="an_engine">Анализ</label>
+        <select id="anEngineSelect" class="compact-select" data-i18n-title="an_engine_title" title="Чем анализировать видео (декодирование кадров)">
+          <option value="auto" selected data-i18n="an_engine_auto">Авто</option>
+          <option value="gpu" data-i18n="an_engine_gpu">GPU</option>
+          <option value="cpu" data-i18n="an_engine_cpu">CPU</option>
         </select>
       </div>
       <div class="ctrl-group">
-        <label class="ctrl-label" for="methodSelect">Метод</label>
-        <select id="methodSelect" class="compact-select" title="Как искать интересные моменты: по сигналам (громкость/сцены/движение) или через ИИ (внешний OpenAI-совместимый API)">
-          <option value="signals" selected>Сигналы</option>
-          <option value="ai">ИИ</option>
+        <label class="ctrl-label" for="methodSelect" data-i18n="method">Метод</label>
+        <select id="methodSelect" class="compact-select" data-i18n-title="method_title" title="Как искать интересные моменты: по сигналам (громкость/сцены/движение) или через ИИ (внешний OpenAI-совместимый API)">
+          <option value="signals" selected data-i18n="method_signals">Сигналы</option>
+          <option value="ai" data-i18n="method_ai">ИИ</option>
         </select>
       </div>
-      <button class="btn secondary" id="btnReanalyze">↻ Пересчитать</button>
+      <button class="btn secondary" id="btnReanalyze"><span data-i18n="recalculate">↻ Пересчитать</span></button>
       <div class="analysis-status" id="analysisStatus"></div>
       <div class="ai-controls" id="aiControls" hidden>
-        <button class="btn tiny" id="btnAiPause" title="Приостановить ИИ-анализ между частями ответов ИИ (прогресс сохранится — можно продолжить, даже после перезапуска)">⏸ Пауза</button>
-        <button class="btn tiny success" id="btnAiResume" title="Продолжить ИИ-анализ с места паузы">▶ Продолжить</button>
-        <button class="btn tiny danger" id="btnAiStop" title="Отменить ИИ-анализ (сохранённая пауза удаляется)">⏹ Стоп</button>
+        <button class="btn tiny" id="btnAiPause" data-i18n-title="ai_pause_title" title="Приостановить ИИ-анализ между частями ответов ИИ (прогресс сохранится — можно продолжить, даже после перезапуска)"><span data-i18n="ai_pause">⏸ Пауза</span></button>
+        <button class="btn tiny success" id="btnAiResume" data-i18n-title="ai_resume_title" title="Продолжить ИИ-анализ с места паузы"><span data-i18n="ai_resume">▶ Продолжить</span></button>
+        <button class="btn tiny danger" id="btnAiStop" data-i18n-title="ai_stop_title" title="Отменить ИИ-анализ (сохранённая пауза удаляется)"><span data-i18n="ai_stop">⏹ Стоп</span></button>
       </div>
     </div>
 
     <!-- Настройки ИИ-анализа (видимы при выборе «Метод: ИИ») -->
     <div class="ai-settings" id="aiSettings" hidden>
-      <div class="ai-settings-title">🤖 ИИ-анализ (OpenAI-совместимый API)</div>
+      <div class="ai-settings-title" data-i18n="ai_settings_title">🤖 ИИ-анализ (OpenAI-совместимый API)</div>
       <div class="ai-settings-grid">
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiEndpoint">Endpoint chat/completions</label>
-          <input type="text" id="aiEndpoint" placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off"
+          <label class="ctrl-label" for="aiEndpoint" data-i18n="ai_endpoint_label">Endpoint chat/completions</label>
+          <input type="text" id="aiEndpoint" data-i18n-placeholder="ai_endpoint_ph" placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off"
+                 data-i18n-title="ai_endpoint_title"
                  title="Базовый адрес API; /chat/completions добавится автоматически. Подходит: OpenAI, OpenRouter, Ollama (http://localhost:11434/v1), LM Studio">
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiKey">API-ключ (хранится только в браузере)</label>
+          <label class="ctrl-label" for="aiKey" data-i18n="ai_key_label">API-ключ (хранится только в браузере)</label>
           <input type="password" id="aiKey" placeholder="sk-…" autocomplete="off">
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiModel">Модель</label>
-          <input type="text" id="aiModel" placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off">
+          <label class="ctrl-label" for="aiModel" data-i18n="ai_model_label">Модель</label>
+          <input type="text" id="aiModel" data-i18n-placeholder="ai_model_ph" placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off">
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiInputSelect">Что отправляем ИИ</label>
-          <select id="aiInputSelect" title="Кадры — картинки с таймкодами. Кадры + речь — ещё и расшифровка (нужна распознанная речь). Только речь — по тексту без картинок.">
-            <option value="frames" selected>Кадры (vision)</option>
-            <option value="frames_speech">Кадры + речь</option>
-            <option value="speech">Только речь</option>
+          <label class="ctrl-label" for="aiInputSelect" data-i18n="ai_input_label">Что отправляем ИИ</label>
+          <select id="aiInputSelect" data-i18n-title="ai_input_title" title="Кадры — картинки с таймкодами. Кадры + речь — ещё и расшифровка (нужна распознанная речь). Только речь — по тексту без картинок.">
+            <option value="frames" selected data-i18n="ai_input_frames">Кадры (vision)</option>
+            <option value="frames_speech" data-i18n="ai_input_frames_speech">Кадры + речь</option>
+            <option value="speech" data-i18n="ai_input_speech">Только речь</option>
           </select>
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiFrames">Каждый N-й кадр</label>
+          <label class="ctrl-label" for="aiFrames" data-i18n="ai_frames_label">Каждый N-й кадр</label>
           <input type="number" id="aiFrames" min="1" max="1000" step="1" value="10"
+                 data-i18n-title="ai_frames_title"
                  title="Число трактуется буквально: написано 10 — уходит каждый 10-й кадр, 15 — каждый 15-й и т.д. Чем меньше число, тем плотнее выборка и выше качество, но больше кадров (токенов/стоимости).">
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiChunkSec">Секунд за раз</label>
+          <label class="ctrl-label" for="aiChunkSec" data-i18n="ai_chunk_label">Секунд за раз</label>
           <input type="number" id="aiChunkSec" min="1" max="3600" step="1" value="60"
+                 data-i18n-title="ai_chunk_title"
                  title="Видео обрабатывается по фрагментам: кадры первых N секунд отправляются в ИИ, ждём ответ, затем следующие N секунд. Так контекст модели не переполняется. Меньше значение — меньше кадров за запрос, но больше обращений к API.">
         </div>
         <div class="ctrl-group vertical">
-          <label class="ctrl-label" for="aiMaxSegments">Сколько моментов</label>
+          <label class="ctrl-label" for="aiMaxSegments" data-i18n="ai_maxseg_label">Сколько моментов</label>
           <input type="number" id="aiMaxSegments" min="0" max="100" step="1" value="0"
+                 data-i18n-title="ai_maxseg_title"
                  title="Сколько всего интересных моментов нужно выбрать (0 — без ограничения). ИИ проставляют score каждому кандидату и оставит N самых важных по всему видео.">
         </div>
       </div>
       <div class="ctrl-group vertical ai-prompt">
-        <label class="ctrl-label" for="aiSystemPrompt">Системный промпт (дополнение)</label>
+        <label class="ctrl-label" for="aiSystemPrompt" data-i18n="ai_prompt_label">Системный промпт (дополнение)</label>
         <textarea id="aiSystemPrompt" rows="3" spellcheck="false"
+          data-i18n-placeholder="ai_prompt_ph"
           placeholder="Дополните основной промпт: какие моменты считать интересными…"></textarea>
-        <span class="ctrl-hint">Основной промпт содержит только правила ответа. Сюда впишите, какие моменты искать (например: только сражения и стрельбу, голы, эмоции, важные реплики…).</span>
-        <span class="ctrl-hint" id="aiSpeechHint" hidden>⚠️ Для способа «Кадры + речь» / «Только речь» сначала распознайте речь кнопкой «🎙 Распознать речь».</span>
+        <span class="ctrl-hint" data-i18n="ai_prompt_hint">Основной промпт содержит только правила ответа. Сюда впишите, какие моменты искать (например: только сражения и стрельбу, голы, эмоции, важные реплики…).</span>
+        <span class="ctrl-hint" id="aiSpeechHint" hidden data-i18n="ai_speech_hint">⚠️ Для способа «Кадры + речь» / «Только речь» сначала распознайте речь кнопкой «🎙 Распознать речь».</span>
       </div>
     </div>
 
     <div class="empty-state" id="emptyState">
       <div class="empty-icon">🎞️</div>
-      <h2>Начните с загрузки видео</h2>
-      <p>MomentCut найдёт интересные моменты автоматически:<br>
+      <h2 data-i18n="empty_title">Начните с загрузки видео</h2>
+      <p data-i18n="empty_text">MomentCut найдёт интересные моменты автоматически:<br>
       громкие всплески, смену сцен и активное движение.</p>
-      <button class="btn primary big" id="btnUploadEmpty">Загрузить видео</button>
+      <button class="btn primary big" id="btnUploadEmpty"><span data-i18n="upload_video">Загрузить видео</span></button>
     </div>
 
     <div class="workspace-body" id="workspaceBody" hidden>
@@ -153,8 +165,8 @@
         <video id="player" controls preload="metadata"></video>
         <div class="player-segment-badge" id="playerSegmentBadge" hidden></div>
         <div class="subs-overlay" id="subsOverlay" hidden></div>
-        <div class="player-resize" id="playerResize" title="Потяните, чтобы изменить размер окна"></div>
-        <div class="speed-control" title="Скорость воспроизведения">
+        <div class="player-resize" id="playerResize" data-i18n-title="player_resize_title" title="Потяните, чтобы изменить размер окна"></div>
+        <div class="speed-control" data-i18n-title="player_speed_title" title="Скорость воспроизведения">
           <select id="speedSelect">
             <option value="0.3">0.3×</option>
             <option value="0.5">0.5×</option>
@@ -168,11 +180,11 @@
       <!-- Таймлайн -->
       <div class="timeline-wrap">
         <div class="timeline-head">
-          <span class="tl-title">Таймлайн интересных моментов</span>
+          <span class="tl-title" data-i18n="tl_title">Таймлайн интересных моментов</span>
           <div class="tl-controls">
-            <span class="ctrl-label">Масштаб</span>
-            <input type="range" id="zoomSlider" min="1" max="40" step="0.1" value="1" title="Приближение таймлайна (по позиции плеера)">
-            <button class="btn tiny" id="btnZoomReset" title="Показать весь ролик">⤢</button>
+            <span class="ctrl-label" data-i18n="tl_scale">Масштаб</span>
+            <input type="range" id="zoomSlider" min="1" max="40" step="0.1" value="1" data-i18n-title="tl_zoom_title" title="Приближение таймлайна (по позиции плеера)">
+            <button class="btn tiny" id="btnZoomReset" data-i18n-title="tl_zoom_reset" title="Показать весь ролик">⤢</button>
           </div>
           <span class="tl-meta" id="tlMeta"></span>
         </div>
@@ -187,80 +199,81 @@
       <!-- Список сегментов -->
       <div class="segments-panel">
         <div class="segments-head">
-          <span>Найденные моменты</span>
+          <span data-i18n="found_moments">Найденные моменты</span>
           <div class="seg-actions">
-            <button class="btn tiny" id="btnAddSeg" title="Добавить сегмент вокруг текущего кадра">+ Кадр</button>
-            <button class="btn tiny" id="btnClearSegs" title="Убрать все сегменты">Очистить</button>
+            <button class="btn tiny" id="btnAddSeg" data-i18n-title="add_frame_title" title="Добавить сегмент вокруг текущего кадра"><span data-i18n="add_frame">+ Кадр</span></button>
+            <button class="btn tiny" id="btnClearSegs" data-i18n-title="clear_title" title="Убрать все сегменты"><span data-i18n="clear">Очистить</span></button>
           </div>
         </div>
         <div class="seg-filters" id="segFilters" hidden>
-          <label class="check src-chip alg-chip" title="Показывать моменты, найденные сигнальным анализом (громкость/сцены/движение)">
-            <input type="checkbox" id="showSignals" checked> 🔵 Алгоритм
+          <label class="check src-chip alg-chip" data-i18n-title="filter_signals_title" title="Показывать моменты, найденные сигнальным анализом (громкость/сцены/движение)">
+            <input type="checkbox" id="showSignals" checked> <span data-i18n="filter_algorithm">🔵 Алгоритм</span>
           </label>
-          <label class="check src-chip ai-chip" title="Показывать моменты, выбранные ИИ">
-            <input type="checkbox" id="showAi" checked> 🟣 ИИ
+          <label class="check src-chip ai-chip" data-i18n-title="filter_ai_title" title="Показывать моменты, выбранные ИИ">
+            <input type="checkbox" id="showAi" checked> <span data-i18n="filter_ai">🟣 ИИ</span>
           </label>
         </div>
         <div class="segments-list" id="segmentsList">
-          <div class="seg-empty" id="segEmpty">Анализ ещё не выполнен. Нажмите «Пересчитать».</div>
+          <div class="seg-empty" id="segEmpty" data-i18n="seg_empty">Анализ ещё не выполнен. Нажмите «Пересчитать».</div>
         </div>
       </div>
 
       <!-- Поиск по словам -->
       <div class="speech-panel" id="speechPanel" hidden>
         <div class="speech-head">
-          <span>🔍 Поиск по словам</span>
-          <button class="btn tiny" id="btnTranscribe">🎙 Распознать речь</button>
+          <span data-i18n="speech_search">🔍 Поиск по словам</span>
+          <button class="btn tiny" id="btnTranscribe"><span data-i18n="transcribe">🎙 Распознать речь</span></button>
         </div>
         <div class="speech-provider">
-          <label class="ctrl-label" for="speechProviderSelect">Источник распознавания</label>
-          <select id="speechProviderSelect" title="Локально — faster-whisper на вашем ПК. API — внешний OpenAI-совместимый сервис (свой endpoint и ключ).">
-            <option value="local">Локально (faster-whisper)</option>
-            <option value="api">Внешний API</option>
+          <label class="ctrl-label" for="speechProviderSelect" data-i18n="speech_provider">Источник распознавания</label>
+          <select id="speechProviderSelect" data-i18n-title="speech_provider_title" title="Локально — faster-whisper на вашем ПК. API — внешний OpenAI-совместимый сервис (свой endpoint и ключ).">
+            <option value="local" data-i18n="speech_provider_local">Локально (faster-whisper)</option>
+            <option value="api" data-i18n="speech_provider_api">Внешний API</option>
           </select>
         </div>
         <div class="speech-model" id="speechModelRow">
-          <label class="ctrl-label" for="speechModelSelect">Модель распознавания</label>
+          <label class="ctrl-label" for="speechModelSelect" data-i18n="speech_model">Модель распознавания</label>
           <select id="speechModelSelect"
+            data-i18n-title="speech_model_title"
             title="Чем больше модель, тем точнее распознавание, но медленнее и больше памяти. При смене модели предыдущая выгружается.">
           </select>
         </div>
         <div class="speech-api-settings" id="speechApiSettings" hidden>
-          <input type="text" id="speechApiEndpoint" placeholder="Endpoint: https://…/v1/audio/transcriptions" spellcheck="false" autocomplete="off">
-          <input type="password" id="speechApiKey" placeholder="API-ключ" autocomplete="off">
-          <input type="text" id="speechApiModel" placeholder="Модель API (напр. whisper-1)" spellcheck="false" autocomplete="off">
+          <input type="text" id="speechApiEndpoint" data-i18n-placeholder="speech_api_endpoint_ph" placeholder="Endpoint: https://…/v1/audio/transcriptions" spellcheck="false" autocomplete="off">
+          <input type="password" id="speechApiKey" data-i18n-placeholder="speech_api_key_ph" placeholder="API-ключ" autocomplete="off">
+          <input type="text" id="speechApiModel" data-i18n-placeholder="speech_api_model_ph" placeholder="Модель API (напр. whisper-1)" spellcheck="false" autocomplete="off">
         </div>
         <div class="speech-diar" id="speechDiarBlock">
-          <label class="check" title="Разделять распознанную речь по голосам (кто говорит). Требует pyannote.audio и токена Hugging Face.">
-            <input type="checkbox" id="diarizeCheck"> 🎭 Разделять по голосам
+          <label class="check" data-i18n-title="diarize_title" title="Разделять распознанную речь по голосам (кто говорит). Требует pyannote.audio и токена Hugging Face.">
+            <input type="checkbox" id="diarizeCheck"> <span data-i18n="diarize">🎭 Разделять по голосам</span>
           </label>
           <div class="speech-diar-settings" id="speechDiarSettings" hidden>
-            <input type="password" id="hfTokenInput" placeholder="Hugging Face токен (hf_…)" autocomplete="off" spellcheck="false">
+            <input type="password" id="hfTokenInput" data-i18n-placeholder="hf_token_ph" placeholder="Hugging Face токен (hf_…)" autocomplete="off" spellcheck="false">
             <div class="speech-diar-counts">
-              <label class="ctrl-label">Спикеров: мин
-                <input type="number" id="minSpeakersInput" min="0" max="20" placeholder="авто" title="Минимум говорящих (0 = авто)">
+              <label class="ctrl-label"><span data-i18n="speakers_min">Спикеров: мин</span>
+                <input type="number" id="minSpeakersInput" min="0" max="20" data-i18n-placeholder="speakers_auto_ph" placeholder="авто" data-i18n-title="speakers_min_title" title="Минимум говорящих (0 = авто)">
               </label>
-              <label class="ctrl-label">макс
-                <input type="number" id="maxSpeakersInput" min="0" max="20" placeholder="авто" title="Максимум говорящих (0 = авто)">
+              <label class="ctrl-label"><span data-i18n="speakers_max">макс</span>
+                <input type="number" id="maxSpeakersInput" min="0" max="20" data-i18n-placeholder="speakers_auto_ph" placeholder="авто" data-i18n-title="speakers_max_title" title="Максимум говорящих (0 = авто)">
               </label>
             </div>
           </div>
           <div class="speech-diar-hint" id="speechDiarHint" hidden></div>
         </div>
         <label class="check subs-preview-toggle">
-          <input type="checkbox" id="previewSubsCheck" checked> 🎞️ Субтитры при просмотре
+          <input type="checkbox" id="previewSubsCheck" checked> <span data-i18n="preview_subs">🎞️ Субтитры при просмотре</span>
         </label>
         <div class="speech-search">
-          <input type="text" id="speechQuery" placeholder="Например: гол, прыжок, победа…" disabled>
-          <button class="btn tiny" id="btnSpeechSearch" disabled>Искать</button>
+          <input type="text" id="speechQuery" data-i18n-placeholder="speech_query_ph" placeholder="Например: гол, прыжок, победа…" disabled>
+          <button class="btn tiny" id="btnSpeechSearch" disabled><span data-i18n="search">Искать</span></button>
         </div>
         <div class="speech-status" id="speechStatus"></div>
         <div class="speech-results" id="speechResults"></div>
         <div class="speech-words-block" id="speechWordsBlock" hidden>
           <div class="speech-words-head">
-            <span>Все слова</span>
-            <label class="check" title="Показать/скрыть список распознанных слов">
-              <input type="checkbox" id="showAllWordsCheck" checked> показать
+            <span data-i18n="all_words">Все слова</span>
+            <label class="check" data-i18n-title="show_words_title" title="Показать/скрыть список распознанных слов">
+              <input type="checkbox" id="showAllWordsCheck" checked> <span data-i18n="show_words">показать</span>
             </label>
           </div>
           <div class="speech-words" id="speechWords"></div>
@@ -271,18 +284,18 @@
 
   <!-- Правый сайдбар: монтаж -->
   <aside class="montage-panel" id="montagePanel">
-    <div class="panel-title">Монтаж</div>
+    <div class="panel-title" data-i18n="montage">Монтаж</div>
 
     <div class="montage-summary">
-      <div class="ms-row"><span>Роликов в сборке</span><b id="msVideos">0</b></div>
-      <div class="ms-row"><span>Моментов</span><b id="msSegments">0</b></div>
-      <div class="ms-row"><span>Итоговая длительность</span><b id="msDuration">0:00</b></div>
+      <div class="ms-row"><span data-i18n="ms_videos">Роликов в сборке</span><b id="msVideos">0</b></div>
+      <div class="ms-row"><span data-i18n="ms_segments">Моментов</span><b id="msSegments">0</b></div>
+      <div class="ms-row"><span data-i18n="ms_duration">Итоговая длительность</span><b id="msDuration">0:00</b></div>
     </div>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="resSelect">Разрешение</label>
+      <label class="ctrl-label" for="resSelect" data-i18n="resolution">Разрешение</label>
       <select id="resSelect">
-        <option value="0">Авто (максимальное)</option>
+        <option value="0" data-i18n="res_auto">Авто (максимальное)</option>
         <option value="2160">2160p (4K)</option>
         <option value="1440">1440p (QHD)</option>
         <option value="1080">1080p (Full HD)</option>
@@ -292,73 +305,73 @@
     </div>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="engineSelect">Движок обработки</label>
+      <label class="ctrl-label" for="engineSelect" data-i18n="engine">Движок обработки</label>
       <select id="engineSelect">
-        <option value="auto" selected>Гибрид (авто)</option>
-        <option value="cpu">CPU (программный)</option>
-        <option value="nvidia">NVIDIA (NVENC)</option>
-        <option value="amd">AMD (AMF)</option>
-        <option value="intel">Intel (QSV)</option>
+        <option value="auto" selected data-i18n="engine_opt_auto">Гибрид (авто)</option>
+        <option value="cpu" data-i18n="engine_opt_cpu">CPU (программный)</option>
+        <option value="nvidia" data-i18n="engine_opt_nvidia">NVIDIA (NVENC)</option>
+        <option value="amd" data-i18n="engine_opt_amd">AMD (AMF)</option>
+        <option value="intel" data-i18n="engine_opt_intel">Intel (QSV)</option>
       </select>
       <span class="ctrl-hint" id="engineHint"></span>
     </div>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="fmtSelect">Формат экспорта</label>
+      <label class="ctrl-label" for="fmtSelect" data-i18n="format">Формат экспорта</label>
       <select id="fmtSelect">
-        <option value="mp4">MP4 (H.264)</option>
-        <option value="hevc">MP4 (HEVC H.265)</option>
-        <option value="webm">WebM (VP9)</option>
-        <option value="mkv">MKV (H.264)</option>
+        <option value="mp4" data-i18n="fmt_mp4">MP4 (H.264)</option>
+        <option value="hevc" data-i18n="fmt_hevc">MP4 (HEVC H.265)</option>
+        <option value="webm" data-i18n="fmt_webm">WebM (VP9)</option>
+        <option value="mkv" data-i18n="fmt_mkv">MKV (H.264)</option>
       </select>
     </div>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="transitionSelect">Переход между моментами</label>
-      <select id="transitionSelect" title="Что вставить между частями. «Плашка-маркер» вставляет цветной кадр между моментами — удобно находить и вырезать их в другом редакторе.">
-        <option value="none" selected>Без перехода</option>
-        <option value="fade">Кроссфейд (fade)</option>
-        <option value="fadeblack">Через чёрный</option>
-        <option value="fadewhite">Через белый</option>
-        <option value="dissolve">Растворение</option>
-        <option value="wipeleft">Шторка влево</option>
-        <option value="slideright">Сдвиг вправо</option>
-        <option value="marker">Плашка-маркер (вставка)</option>
+      <label class="ctrl-label" for="transitionSelect" data-i18n="transition">Переход между моментами</label>
+      <select id="transitionSelect" data-i18n-title="transition_title" title="Что вставить между частями. «Плашка-маркер» вставляет цветной кадр между моментами — удобно находить и вырезать их в другом редакторе.">
+        <option value="none" selected data-i18n="tr_none">Без перехода</option>
+        <option value="fade" data-i18n="tr_fade">Кроссфейд (fade)</option>
+        <option value="fadeblack" data-i18n="tr_fadeblack">Через чёрный</option>
+        <option value="fadewhite" data-i18n="tr_fadewhite">Через белый</option>
+        <option value="dissolve" data-i18n="tr_dissolve">Растворение</option>
+        <option value="wipeleft" data-i18n="tr_wipeleft">Шторка влево</option>
+        <option value="slideright" data-i18n="tr_slideright">Сдвиг вправо</option>
+        <option value="marker" data-i18n="tr_marker">Плашка-маркер (вставка)</option>
       </select>
     </div>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="xfadeSelect">Длительность перехода</label>
-      <select id="xfadeSelect" title="Сколько секунд длится переход (для плашки-маркера — длительность цветного кадра)">
-        <option value="0.3">0.3 с</option>
-        <option value="0.5">0.5 с</option>
-        <option value="1" selected>1 с</option>
-        <option value="2">2 с</option>
-        <option value="3">3 с</option>
+      <label class="ctrl-label" for="xfadeSelect" data-i18n="xfade">Длительность перехода</label>
+      <select id="xfadeSelect" data-i18n-title="xfade_title" title="Сколько секунд длится переход (для плашки-маркера — длительность цветного кадра)">
+        <option value="0.3" data-i18n="xfade_03">0.3 с</option>
+        <option value="0.5" data-i18n="xfade_05">0.5 с</option>
+        <option value="1" selected data-i18n="xfade_1">1 с</option>
+        <option value="2" data-i18n="xfade_2">2 с</option>
+        <option value="3" data-i18n="xfade_3">3 с</option>
       </select>
     </div>
 
     <div class="ctrl-group vertical" id="markerColorRow" hidden>
-      <label class="ctrl-label" for="markerColor">Цвет плашки</label>
-      <input type="color" id="markerColor" value="#ff00ff" title="Цвет вставки-маркера между моментами">
+      <label class="ctrl-label" for="markerColor" data-i18n="marker_color">Цвет плашки</label>
+      <input type="color" id="markerColor" value="#ff00ff" data-i18n-title="marker_color_title" title="Цвет вставки-маркера между моментами">
     </div>
 
-    <label class="check" title="Вписать субтитры по распознанной речи прямо в видео">
-      <input type="checkbox" id="subsCheck"> 🎞️ Субтитры (речь)
+    <label class="check" data-i18n-title="subs_montage_title" title="Вписать субтитры по распознанной речи прямо в видео">
+      <input type="checkbox" id="subsCheck"> <span data-i18n="subs_montage">🎞️ Субтитры (речь)</span>
     </label>
 
     <div class="ctrl-group vertical">
-      <label class="ctrl-label" for="crfSlider">Качество: CRF <span id="crfValue">20</span></label>
-      <input type="range" id="crfSlider" min="16" max="30" step="1" value="20" title="Ниже = лучше качество, больше размер">
-      <span class="ctrl-hint">Чем ниже CRF, тем качественнее и тяжелее файл</span>
+      <label class="ctrl-label" for="crfSlider"><span data-i18n="quality">Качество: CRF</span> <span id="crfValue">20</span></label>
+      <input type="range" id="crfSlider" min="16" max="30" step="1" value="20" data-i18n-title="crf_title" title="Ниже = лучше качество, больше размер">
+      <span class="ctrl-hint" data-i18n="quality_hint">Чем ниже CRF, тем качественнее и тяжелее файл</span>
     </div>
 
     <div class="montage-queue" id="montageQueue">
-      <div class="mq-empty">Включите моменты в сборку — отмечайте их галочками в списке.</div>
+      <div class="mq-empty" data-i18n="mq_empty">Включите моменты в сборку — отмечайте их галочками в списке.</div>
     </div>
 
     <button class="btn primary wide" id="btnMontage" disabled>
-      ✂️ Смонтировать
+      <span data-i18n="montage_btn">✂️ Смонтировать</span>
     </button>
 
     <div class="job-progress" id="jobProgress" hidden>
@@ -368,9 +381,9 @@
     </div>
 
     <div class="montage-result" id="montageResult" hidden>
-      <div class="mr-title">Готово! 🎉</div>
+      <div class="mr-title" data-i18n="done_title">Готово! 🎉</div>
       <div class="mr-meta" id="mrMeta"></div>
-      <a class="btn success wide" id="btnDownload" download>⬇ Скачать видео</a>
+      <a class="btn success wide" id="btnDownload" download><span data-i18n="download">⬇ Скачать видео</span></a>
     </div>
   </aside>
 </main>
@@ -378,11 +391,11 @@
 <!-- Модальное окно справки: раскрывающиеся вкладки -->
 <div class="modal-backdrop" id="helpModal" hidden>
   <div class="modal modal-help">
-    <div class="modal-head"><h3>Справка MomentCut</h3><button class="modal-close" id="helpClose">✕</button></div>
+    <div class="modal-head"><h3 data-i18n="help_title">Справка MomentCut</h3><button class="modal-close" id="helpClose">✕</button></div>
     <div class="modal-body">
       <div class="help-tabs">
 
-        <details class="help-tab" open>
+        <details class="help-tab" open data-i18n-html="help_quickstart">
           <summary>🚀 Быстрый старт</summary>
           <ol>
             <li><b>Загрузите</b> видео — кнопкой «Загрузить видео», перетащив файлы в окно, или полем «С диска» (по пути, без копирования).</li>
@@ -393,7 +406,7 @@
           </ol>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_upload">
           <summary>📥 Загрузка, импорт и библиотека</summary>
           <ul>
             <li>Поддерживаются форматы: MP4, MOV, MKV, AVI, WebM, M4V, TS, FLV, WMV, MPG, MPEG, 3GP.</li>
@@ -404,7 +417,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_analysis">
           <summary>🧠 Анализ моментов (сигналы)</summary>
           <p>Ищет интересные моменты по трём сигналам:</p>
           <ul>
@@ -415,7 +428,7 @@
           <p>Движок: <b>Авто / GPU (NVDEC) / CPU</b> — результаты одинаковые, на GPU анализ быстрее. <b>Строгость отбора</b> задаёт порог: выше — меньше, но «интереснее» моментов. Кнопка «↻ Пересчитать» запускает анализ заново.</p>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_ai">
           <summary>🤖 ИИ-анализ</summary>
           <p>В панели анализа выберите <b>Метод: ИИ</b> — моменты ищет внешняя модель через OpenAI-совместимый API (OpenAI, OpenRouter, Ollama, LM Studio…).</p>
           <ul>
@@ -429,7 +442,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_timeline">
           <summary>✏️ Таймлайн и редактирование</summary>
           <ul>
             <li><b>Зум</b>: ползунок «Масштаб» (до ×40) и колёсико мыши над таймлайном (центрируется под курсором); «⤢» — показать весь ролик.</li>
@@ -441,7 +454,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_speech">
           <summary>🗣 Распознавание речи и поиск</summary>
           <p>Кнопка <b>«🎙 Распознать речь»</b> в панели «Поиск по словам»:</p>
           <ul>
@@ -453,7 +466,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_diarization">
           <summary>🎭 Разделение по голосам (диаризация)</summary>
           <ul>
             <li>Включите <b>«🎭 Разделять по голосам»</b> перед распознаванием — реплики разных говорящих получат метки «Спикер 1…», цвета на таймлайне и префиксы в субтитрах.</li>
@@ -463,7 +476,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_montage">
           <summary>✂️ Монтаж и экспорт</summary>
           <ul>
             <li><b>Разрешение</b>: авто (максимальное) или фиксированное от 480p до 4K.</li>
@@ -474,7 +487,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_projects">
           <summary>💾 Проекты</summary>
           <ul>
             <li>Кнопка <b>«💾»</b> в верхней панели сохраняет проект в JSON (видео, моменты, распознанную речь), <b>«📂»</b> — загружает его.</li>
@@ -482,7 +495,7 @@
           </ul>
         </details>
 
-        <details class="help-tab">
+        <details class="help-tab" data-i18n-html="help_privacy">
           <summary>🔒 Приватность</summary>
           <p>Сигнальный анализ и локальное распознавание речи выполняются <b>на вашем компьютере</b>; видео не отправляются никуда. В интернет уходят только:</p>
           <ul>
@@ -499,6 +512,6 @@
 
 <div class="toast-wrap" id="toasts"></div>
 
-<script type="module" src="/static/js/app.js?v=33"></script>
+<script type="module" src="/static/js/app.js?v=34"></script>
 </body>
 </html>

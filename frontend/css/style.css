@@ -63,6 +63,18 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.3px;
 }
 .brand-sub { font-size: 11px; color: var(--text-dim); }
+.lang-switch { display: flex; align-items: center; margin-left: 14px; margin-right: auto; }
+.lang-switch select {
+  background: #1a2332;
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+.lang-switch select:hover { border-color: var(--accent); }
 .topbar-actions { display: flex; gap: 10px; align-items: center; }
 
 /* ---------- Кнопки ---------- */

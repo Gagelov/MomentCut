@@ -1,9 +1,13 @@
 // MomentCut — главный модуль приложения.
-import { API } from './api.js?v=18';
-import { formatTime, formatSize, parseTime, toast, speakerColor, speakerColorByName } from './utils.js?v=16';
-import { Timeline } from './timeline.js?v=16';
+import { API } from './api.js?v=19';
+import { formatTime, formatSize, parseTime, toast, speakerColor, speakerColorByName } from './utils.js?v=17';
+import { Timeline } from './timeline.js?v=17';
+import { t, getLang, setLang, onLangChange } from './i18n.js?v=2';
 
 // Основной системный промпт задаётся на сервере; поле в UI — дополнение к нему.
+
+// Сервер возвращает это сообщение при отмене анализа — сравниваем по нему (не переводится).
+const SERVER_CANCEL_MSG = 'Анализ отменён';
 
 // ---------------------------------------------------------------
 // Состояние
@@ -25,6 +29,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   fileInput: $('fileInput'),
   projectFile: $('projectFile'),
+  langSelect: $('langSelect'),
   btnUpload: $('btnUpload'),
   btnUploadEmpty: $('btnUploadEmpty'),
   btnSaveProject: $('btnSaveProject'),
@@ -175,7 +180,7 @@ async function init() {
       showEmpty();
     }
   } catch (e) {
-    toast(`Не удалось связаться с сервером: ${e.message}`, 'error');
+    toast(t('err_connect', { msg: e.message }), 'error');
   }
   setInterval(pollJobs, 900);
 }
@@ -227,7 +232,7 @@ function configureEngineSelect() {
   }
   const sp = state.engineInfo.speech;
   if (sp && sp.available) {
-    hints.push(`Речь: ${sp.loaded || sp.model || '—'}`);
+    hints.push(`${t('hint_speech')}: ${sp.loaded || sp.model || '—'}`);
     // Заполняем выбор модели распознавания речи.
     const opts = sp.options && sp.options.length ? sp.options : ['base'];
     if (!el.speechModelSelect.dataset.touched) {
@@ -248,24 +253,26 @@ function configureEngineSelect() {
     el.speechModelSelect.disabled = true;
   }
   if (sp && sp.diarization) {
-    hints.push(`Диаризация: ${sp.diar_device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`);
+    hints.push(`${t('hint_diarization')}: ${sp.diar_device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`);
   }
-  el.engineHint.textContent = hints.length ? `Доступно: ${hints.join(' · ')}` : 'Доступен только CPU';
+  el.engineHint.textContent = hints.length ? `${t('engine_available')}: ${hints.join(' · ')}` : t('engine_cpu_only');
 
   // Движок монтажа: сбрасываем на «Гибрид (авто)», если пользователь ещё не выбирал.
-  if (!el.engineSelect.dataset.touched) el.engineSelect.value = 'auto';
-  el.engineSelect.addEventListener('change', () => {
-    el.engineSelect.dataset.touched = '1';
-  }, { once: true });
+  if (!configureEngineSelect._ready) {
+    configureEngineSelect._ready = true;
+    if (!el.engineSelect.dataset.touched) el.engineSelect.value = 'auto';
+    el.engineSelect.addEventListener('change', () => {
+      el.engineSelect.dataset.touched = '1';
+    });
+  }
 
-  // Отключаем недоступные GPU-движки монтажа.
+  // Отключаем недоступные GPU-движки монтажа и переводим тексты опций.
   const availableVendors = new Set(Object.values(hw).flat());
   for (const opt of el.engineSelect.options) {
     const val = opt.value;
-    if (['auto', 'cpu'].includes(val)) continue;
-    const ok = availableVendors.has(val);
+    const ok = availableVendors.has(val) || ['auto', 'cpu'].includes(val);
     opt.disabled = !ok;
-    if (!ok) opt.textContent = `${opt.textContent} (недоступно)`;
+    opt.textContent = t(`engine_opt_${val}`) + (ok ? '' : ` (${t('unavailable')})`);
   }
 
   // Движок анализа: GPU доступен, если ffmpeg умеет аппаратное декодирование (NVDEC).
@@ -273,7 +280,7 @@ function configureEngineSelect() {
   const anGpu = el.anEngineSelect.querySelector('option[value="gpu"]');
   if (anGpu) {
     anGpu.disabled = !gpuOk;
-    if (!gpuOk) anGpu.textContent = 'GPU (недоступно)';
+    anGpu.textContent = gpuOk ? t('an_engine_gpu') : `GPU (${t('unavailable')})`;
   }
   if (!gpuOk && el.anEngineSelect.value === 'gpu') el.anEngineSelect.value = 'auto';
 }
@@ -282,6 +289,9 @@ function configureEngineSelect() {
 // События
 // ---------------------------------------------------------------
 function bindEvents() {
+  el.langSelect.value = getLang();
+  el.langSelect.addEventListener('change', () => setLang(el.langSelect.value));
+
   el.btnUpload.addEventListener('click', () => el.fileInput.click());
   el.btnUploadEmpty.addEventListener('click', () => el.fileInput.click());
   el.fileInput.addEventListener('change', (e) => {
@@ -476,10 +486,10 @@ async function importFromDisk() {
     if (!state.videos.some((v) => v.id === rec.id)) state.videos.push(rec);
     renderSidebar();
     await selectVideo(rec.id);
-    toast(`«${rec.name}» добавлен — файл не копировался`, 'success');
+    toast(t('import_added', { name: rec.name }), 'success');
     if (!rec.analysis) startAnalysis(rec);
   } catch (e) {
-    toast(`Не удалось добавить видео: ${e.message}`, 'error');
+    toast(t('err_add_video', { msg: e.message }), 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = old;
@@ -489,23 +499,23 @@ async function importFromDisk() {
 async function uploadFiles(files) {
   for (const file of files) {
     if (!file.type.startsWith('video/')) {
-      toast(`«${file.name}» — это не видео`, 'error');
+      toast(t('not_video', { name: file.name }), 'error');
       continue;
     }
-    const toastEl = toastProgress(`Загрузка «${file.name}»…`);
+    const toastEl = toastProgress(t('uploading', { name: file.name }));
     try {
       const rec = await API.upload(file, (p) => {
-        toastEl.textContent = `Загрузка «${file.name}»… ${Math.round(p * 100)}%`;
+        toastEl.textContent = `${t('uploading', { name: file.name })} ${Math.round(p * 100)}%`;
       });
       toastEl.remove();
       state.videos.push(rec);
       renderSidebar();
       await selectVideo(rec.id);
-      toast(`«${rec.name}» загружен (${formatSize(file.size)})`, 'success');
+      toast(t('uploaded', { name: rec.name, size: formatSize(file.size) }), 'success');
       startAnalysis(rec);
     } catch (e) {
       toastEl.remove();
-      toast(`Не удалось загрузить «${file.name}»: ${e.message}`, 'error');
+      toast(t('err_upload', { name: file.name, msg: e.message }), 'error');
     }
   }
 }
@@ -563,7 +573,7 @@ async function startAnalysis(video, opts = {}) {
     // снимаем с неё паузу (сервер продолжит с того же окна).
     if (existing) {
       try { await API.resumeJob(existing.jobId); }
-      catch (e) { toast(`Не удалось продолжить: ${e.message}`, 'error'); return; }
+      catch (e) { toast(t('err_resume', { msg: e.message }), 'error'); return; }
       state.jobData.set(existing.jobId, {
         ...(state.jobData.get(existing.jobId) || {}),
         status: 'running',
@@ -588,7 +598,7 @@ async function startAnalysis(video, opts = {}) {
     renderSidebar();
     renderAnalysisStatus();
   } catch (e) {
-    toast(`Ошибка запуска анализа: ${e.message}`, 'error');
+    toast(t('err_start_analysis', { msg: e.message }), 'error');
   }
 }
 
@@ -599,9 +609,9 @@ async function pauseActiveAnalysis() {
   if (!aj) return;
   try {
     await API.pauseJob(aj.jobId);
-    toast('ИИ-анализ на паузе — прогресс сохранён, можно продолжить', 'success');
+    toast(t('analysis_paused_toast'), 'success');
   } catch (e) {
-    toast(`Не удалось поставить на паузу: ${e.message}`, 'error');
+    toast(t('err_pause', { msg: e.message }), 'error');
   }
 }
 
@@ -625,9 +635,9 @@ async function stopActiveAnalysis() {
   }
   try {
     await API.stopJob(aj.jobId);
-    toast('Анализ отменён', 'info');
+    toast(t('analysis_cancelled'), 'info');
   } catch (e) {
-    toast(`Не удалось остановить: ${e.message}`, 'error');
+    toast(t('err_stop', { msg: e.message }), 'error');
   }
 }
 
@@ -646,9 +656,9 @@ async function cancelPausedAnalysis() {
     }
     renderSidebar();
     renderAnalysisStatus();
-    toast('ИИ-анализ отменён', 'info');
+    toast(t('ai_analysis_cancelled'), 'info');
   } catch (e) {
-    toast(`Не удалось отменить: ${e.message}`, 'error');
+    toast(t('err_cancel', { msg: e.message }), 'error');
   }
 }
 
@@ -680,10 +690,10 @@ function aiProgressDetail(posSec, duration, segCount) {
   const parts = [];
   if (posSec != null && Number.isFinite(posSec) && duration) {
     const pos = Math.max(0, Math.min(posSec, duration));
-    parts.push(`просмотрено ${formatTime(pos)}/${formatTime(duration)}`);
+    parts.push(t('ai_viewed', { pos: formatTime(pos), dur: formatTime(duration) }));
   }
   if (segCount != null && Number.isFinite(segCount)) {
-    parts.push(`моментов: ${segCount}`);
+    parts.push(t('ai_moments_count', { n: segCount }));
   }
   return parts.length ? ' · ' + parts.join(' · ') : '';
 }
@@ -703,12 +713,12 @@ function renderAnalysisStatus() {
     const pct = Math.round((job && job.progress || 0) * 100);
     const det = aiProgressDetail(job && job.ai_pos, v.info.duration, job && job.ai_segments);
     if (job && job.status === 'paused') {
-      el.analysisStatus.innerHTML = `⏸ ИИ-анализ на паузе: <b>${pct}%</b>${det}`;
+      el.analysisStatus.innerHTML = t('ai_paused_status', { pct, det });
       setAiControls('paused');
       return;
     }
     if (job) {
-      el.analysisStatus.innerHTML = `<span class="spin">◌</span> ИИ-анализ <b>${pct}%</b>${det}`;
+      el.analysisStatus.innerHTML = t('ai_running_status', { pct, det });
       setAiControls('running');
       return;
     }
@@ -719,29 +729,29 @@ function renderAnalysisStatus() {
   if (v.ai_resume) {
     const pct = Math.round((v.ai_resume.progress || 0) * 100);
     const det = aiProgressDetail(v.ai_resume.pos, v.info.duration, v.ai_resume.segments);
-    el.analysisStatus.innerHTML = `⏸ ИИ-анализ на паузе: <b>${pct}%</b>${det}`;
+    el.analysisStatus.innerHTML = t('ai_paused_status', { pct, det });
     setAiControls('resume-only');
     return;
   }
   if (v._analyzing) {
-    el.analysisStatus.innerHTML = '<span class="spin">◌</span> Анализ…';
+    el.analysisStatus.innerHTML = '<span class="spin">◌</span> ' + t('analyzing');
     setAiControls('none');
     return;
   }
   if (v._error) {
-    el.analysisStatus.textContent = v._error === 'Анализ отменён' ? 'Анализ отменён' : 'Ошибка анализа';
+    el.analysisStatus.textContent = v._error === SERVER_CANCEL_MSG ? t('analysis_cancelled') : t('analysis_error');
     setAiControls('none');
     return;
   }
   if (v.analysis) {
     const nAi = v.analysis.segments.filter((s) => segSource(s) === 'ai').length;
     el.analysisStatus.textContent = nAi
-      ? `${v.analysis.segments.length} моментов (${nAi} ИИ)`
-      : `${v.analysis.segments.length} моментов`;
+      ? t('moments_with_ai', { n: v.analysis.segments.length, ai: nAi })
+      : t('moments', { n: v.analysis.segments.length });
     setAiControls('none');
     return;
   }
-  el.analysisStatus.textContent = 'Анализ ещё не выполнен';
+  el.analysisStatus.textContent = t('analysis_not_done');
   setAiControls('none');
 }
 
@@ -756,7 +766,7 @@ function updateVideoProgress(videoId, job) {
   if (st) {
     const video = state.videos[vi];
     st.textContent = job.kind === 'analyze'
-      ? `Анализ… ${Math.round(job.progress * 100)}%${aiProgressDetail(job.ai_pos, video && video.info && video.info.duration, job.ai_segments)}`
+      ? t('analysis_progress_status', { pct: Math.round(job.progress * 100), det: aiProgressDetail(job.ai_pos, video && video.info && video.info.duration, job.ai_segments) })
       : '';
   }
 }
@@ -790,19 +800,19 @@ async function pollJobs() {
           renderAnalysisStatus();
           const av = activeVideo();
           const n = av && av.analysis ? av.analysis.segments.length : 0;
-          toast(`Анализ готов: найдено моментов — ${n}`, 'success');
+          toast(t('analysis_ready', { n }), 'success');
         }
       } else if (job.status === 'error') {
         state.jobs.delete(jobId);
         state.jobData.delete(jobId);
         state.videos[vi]._analyzing = false;
         state.videos[vi]._aiPaused = false;
-        if (job.error !== 'Анализ отменён') state.videos[vi]._error = job.error;
+        if (job.error !== SERVER_CANCEL_MSG) state.videos[vi]._error = job.error;
         renderSidebar();
         if (state.activeId === meta.videoId) {
           renderAnalysisStatus();
-          if (job.error === 'Анализ отменён') toast('Анализ отменён', 'info');
-          else toast(`Ошибка анализа: ${job.error}`, 'error');
+          if (job.error === SERVER_CANCEL_MSG) toast(t('analysis_cancelled'), 'info');
+          else toast(t('err_analysis', { msg: job.error }), 'error');
         }
       } else if (job.status === 'paused') {
         state.videos[vi]._analyzing = true;
@@ -827,11 +837,11 @@ async function pollJobs() {
       } else if (job.status === 'error') {
         state.jobs.delete(jobId);
         el.jobProgress.hidden = true;
-        toast(`Ошибка монтажа: ${job.error}`, 'error');
+        toast(t('err_montage', { msg: job.error }), 'error');
       }
     } else if (meta.kind === 'transcribe') {
       if (el.speechStatus) {
-        el.speechStatus.innerHTML = `<span class="spin">◌</span> ${job.message || 'Распознавание…'}`;
+        el.speechStatus.innerHTML = `<span class="spin">◌</span> ${job.message || t('transcribing')}`;
       }
       if (job.status === 'done') {
         state.jobs.delete(jobId);
@@ -848,11 +858,11 @@ async function pollJobs() {
         loadWords(activeVideo());
         updatePreviewSubs();
         loadEngineInfo();   // обновляем «Речь: <модель>» (загруженная модель могла смениться)
-        toast('Речь распознана — можно искать по словам', 'success');
+        toast(t('speech_ready'), 'success');
       } else if (job.status === 'error') {
         state.jobs.delete(jobId);
-        if (el.speechStatus) el.speechStatus.textContent = 'Ошибка распознавания';
-        toast(`Ошибка распознавания: ${job.error}`, 'error');
+        if (el.speechStatus) el.speechStatus.textContent = t('err_transcribe');
+        toast(t('err_transcribe_msg', { msg: job.error }), 'error');
       }
     }
   }
@@ -892,15 +902,15 @@ function renderSidebar() {
     if (v.external) {
       const b = document.createElement('span');
       b.className = 'video-badge';
-      b.textContent = 'с диска';
-      b.title = 'Файл не копировался в папку приложения (читается по пути) — при удалении записи исходник сохранится';
+      b.textContent = t('from_disk');
+      b.title = t('from_disk_title');
       name.appendChild(b);
     }
     if (v.speech_diarized && v.speech_speakers) {
       const b = document.createElement('span');
       b.className = 'video-badge diar';
-      b.textContent = `🎭 спикеры: ${v.speech_speakers}`;
-      b.title = 'Речь разделена по голосам (диаризация)';
+      b.textContent = t('speakers_badge', { n: v.speech_speakers });
+      b.title = t('speakers_badge_title');
       name.appendChild(b);
     }
     meta.appendChild(name);
@@ -919,12 +929,12 @@ function renderSidebar() {
         const aj = analyzeJobFor(v.id);
         const job = aj && state.jobData.get(aj.jobId);
         const det = aiProgressDetail(job && job.ai_pos, v.info.duration, job && job.ai_segments);
-        st.textContent = `⏸ ИИ-анализ на паузе (${Math.round(pausedPercentFor(v) * 100)}%)${det}`;
+        st.textContent = t('ai_paused_sidebar', { pct: Math.round(pausedPercentFor(v) * 100), det });
         meta.appendChild(st);
       } else {
         const st = document.createElement('div');
         st.className = 'video-status';
-        st.textContent = 'Анализ…';
+        st.textContent = t('analyzing');
         meta.appendChild(st);
         const pm = document.createElement('div');
         pm.className = 'progress-mini';
@@ -936,20 +946,20 @@ function renderSidebar() {
       const st = document.createElement('div');
       st.className = 'video-status paused';
       const det = aiProgressDetail(v.ai_resume.pos, v.info.duration, v.ai_resume.segments);
-      st.textContent = `⏸ ИИ-анализ на паузе (${Math.round(pausedPercentFor(v) * 100)}%)${det}`;
+      st.textContent = t('ai_paused_sidebar', { pct: Math.round(pausedPercentFor(v) * 100), det });
       meta.appendChild(st);
     } else if (v._error) {
       const st = document.createElement('div');
       st.className = 'video-status error';
-      st.textContent = 'Ошибка: ' + v._error;
+      st.textContent = t('err_prefix', { msg: v._error });
       meta.appendChild(st);
     } else if (v.analysis) {
       const st = document.createElement('div');
       st.className = 'video-status';
       const nAi = v.analysis.segments.filter((s) => segSource(s) === 'ai').length;
       st.textContent = nAi
-        ? `${v.analysis.segments.length} моментов (${nAi} ИИ)`
-        : `${v.analysis.segments.length} моментов`;
+        ? t('moments_with_ai', { n: v.analysis.segments.length, ai: nAi })
+        : t('moments', { n: v.analysis.segments.length });
       meta.appendChild(st);
     }
 
@@ -959,7 +969,7 @@ function renderSidebar() {
     if (v.analysis && v.analysis.segments && v.analysis.segments.length) {
       const cl = document.createElement('button');
       cl.className = 'video-clear';
-      cl.title = 'Очистить найденные моменты этого видео';
+      cl.title = t('clear_moments_title');
       cl.textContent = '⌫';
       cl.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -970,7 +980,7 @@ function renderSidebar() {
 
     const rm = document.createElement('button');
     rm.className = 'video-remove';
-    rm.title = 'Удалить видео';
+    rm.title = t('remove_video_title');
     rm.textContent = '✕';
     rm.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -993,7 +1003,7 @@ async function removeVideo(id) {
   try {
     await API.deleteVideo(id);
   } catch (e) {
-    toast(`Не удалось удалить: ${e.message}`, 'error');
+    toast(t('err_delete', { msg: e.message }), 'error');
     return;
   }
   const idx = state.videos.findIndex((v) => v.id === id);
@@ -1014,7 +1024,7 @@ async function removeVideo(id) {
 // удаляются вместе с файлами/данными/кешем, а у видео «с диска» удаляется
 // только запись — оригинальный файл на диске остаётся.
 async function cleanupLibrary() {
-  if (!window.confirm('Убрать все видео из библиотеки?\n\nЗагруженные через UI видео будут удалены вместе с данными и кешем.\nВидео «с диска» будут убраны из списка, но их файлы на диске останутся.')) return;
+  if (!window.confirm(t('confirm_cleanup'))) return;
   const av = activeVideo();
   // Активное видео будет убрано из списка; освобождаем файл от стрима плеера,
   // иначе Windows держит его открытым (и загруженное нельзя будет удалить).
@@ -1038,10 +1048,10 @@ async function cleanupLibrary() {
     const n = res && res.removed_count != null
       ? res.removed_count
       : (res && res.removed ? res.removed.length : 0);
-    toast(n ? `Библиотека очищена: убрано видео — ${n}` : 'Список уже пуст',
+    toast(n ? t('library_cleared', { n }) : t('list_empty'),
           n ? 'success' : 'info');
   } catch (e) {
-    toast(`Не удалось очистить: ${e.message}`, 'error');
+    toast(t('err_cleanup', { msg: e.message }), 'error');
   }
 }
 
@@ -1108,7 +1118,7 @@ function updateSpeechPanel(v) {
     el.hfTokenInput.disabled = true;
     el.minSpeakersInput.disabled = true;
     el.maxSpeakersInput.disabled = true;
-    el.speechStatus.innerHTML = '<span class="spin">◌</span> Распознавание речи…';
+    el.speechStatus.innerHTML = '<span class="spin">◌</span> ' + t('transcribing_speech');
     return;
   }
   el.btnTranscribe.disabled = false;
@@ -1122,20 +1132,20 @@ function updateSpeechPanel(v) {
   if (v.has_speech) {
     el.speechQuery.disabled = false;
     el.btnSpeechSearch.disabled = false;
-    const lang = v.speech_lang ? ` · язык: ${v.speech_lang}` : '';
-    let msg = `Распознано слов: ${v.speech_words}${lang}.`;
+    const lang = v.speech_lang ? t('lang_suffix', { lang: v.speech_lang }) : '';
+    let msg = t('words_recognized', { n: v.speech_words, lang });
     if (v.speech_diarized && v.speech_speakers) {
-      msg = `Распознано слов: ${v.speech_words}${lang} · 🎭 спикеров: ${v.speech_speakers}. Цвет слов на таймлайне — говорящий.`;
+      msg = t('words_recognized_speakers', { n: v.speech_words, lang, s: v.speech_speakers });
     } else if (v.speech_diar_error) {
-      msg = `Распознано слов: ${v.speech_words}${lang} · ⚠ разделение по голосам не выполнено: ${v.speech_diar_error}`;
+      msg = t('words_recognized_diar_err', { n: v.speech_words, lang, err: v.speech_diar_error });
     } else if (el.diarizeCheck.checked) {
-      msg = `Распознано слов: ${v.speech_words}${lang} · включено разделение по голосам — нажмите «🎙 Распознать речь», чтобы разметить спикеров.`;
+      msg = t('words_recognized_diar_on', { n: v.speech_words, lang });
     }
-    el.speechStatus.textContent = `${msg} Введите слово для поиска.`;
+    el.speechStatus.textContent = t('speech_status_hint', { msg });
   } else {
     el.speechQuery.disabled = true;
     el.btnSpeechSearch.disabled = true;
-    el.speechStatus.textContent = 'Речь не распознана. Нажмите «🎙 Распознать речь» (модель скачается при первом запуске).';
+    el.speechStatus.textContent = t('no_speech_status');
   }
 }
 
@@ -1158,12 +1168,10 @@ function syncDiarUI() {
   const avail = !!(state.engineInfo && state.engineInfo.speech
                    && state.engineInfo.speech.diarization);
   if (!avail) {
-    el.speechDiarHint.textContent =
-      '⚠ Не установлен pyannote.audio: pip install pyannote.audio torch torchaudio';
+    el.speechDiarHint.textContent = t('diar_hint_pyannote');
     el.speechDiarHint.hidden = false;
   } else if (!el.hfTokenInput.value.trim()) {
-    el.speechDiarHint.textContent =
-      'Нужен токен Hugging Face (huggingface.co/settings/tokens) и принятые условия модели pyannote/speaker-diarization-3.1';
+    el.speechDiarHint.textContent = t('diar_hint_token');
     el.speechDiarHint.hidden = false;
   } else {
     el.speechDiarHint.hidden = true;
@@ -1327,7 +1335,7 @@ function renderAllWords(v) {
     chip.addEventListener('click', () => {
       playAt(w.start);
       el.playerSegmentBadge.hidden = false;
-      el.playerSegmentBadge.textContent = `«${w.word}»: ${formatTime(w.start)}`;
+      el.playerSegmentBadge.textContent = t('word_badge', { w: w.word, time: formatTime(w.start) });
     });
     frag.appendChild(chip);
   }
@@ -1392,7 +1400,7 @@ async function startTranscribe(v) {
   if (opts.diarize) {
     opts.hf_token = el.hfTokenInput.value.trim() || null;
     if (!opts.hf_token) {
-      toast('Для разделения по голосам укажите токен Hugging Face (поле в панели распознавания)', 'error');
+      toast(t('err_hf_token'), 'error');
       syncDiarUI();
       return;
     }
@@ -1408,7 +1416,7 @@ async function startTranscribe(v) {
     state.jobs.set(job_id, { kind: 'transcribe', videoId: v.id });
     updateSpeechPanel(v);
   } catch (e) {
-    toast(`Не удалось запустить распознавание: ${e.message}`, 'error');
+    toast(t('err_start_transcribe', { msg: e.message }), 'error');
   }
 }
 
@@ -1416,14 +1424,14 @@ async function doSpeechSearch(v) {
   if (!v || !v.has_speech) return;
   const q = el.speechQuery.value.trim();
   if (!q) return;
-  el.speechStatus.textContent = 'Поиск…';
+  el.speechStatus.textContent = t('searching');
   try {
     const { matches } = await API.search(v.id, q);
     state.speechResults = matches;
     renderSpeechResults(matches, q);
   } catch (e) {
-    el.speechStatus.textContent = 'Ошибка поиска';
-    toast(`Ошибка поиска: ${e.message}`, 'error');
+    el.speechStatus.textContent = t('err_search');
+    toast(t('err_search_msg', { msg: e.message }), 'error');
   }
 }
 
@@ -1432,12 +1440,12 @@ function renderSpeechResults(matches, q) {
   if (!matches.length) {
     const d = document.createElement('div');
     d.className = 'sp-empty';
-    d.textContent = `Слово «${q}» не найдено.`;
+    d.textContent = t('word_not_found', { q });
     el.speechResults.appendChild(d);
-    el.speechStatus.textContent = `Найдено: 0`;
+    el.speechStatus.textContent = t('found_count', { n: 0 });
     return;
   }
-  el.speechStatus.textContent = `Найдено: ${matches.length}`;
+  el.speechStatus.textContent = t('found_count', { n: matches.length });
   matches.forEach((m, i) => {
     const row = document.createElement('div');
     row.className = 'sp-result';
@@ -1470,23 +1478,23 @@ function renderSpeechResults(matches, q) {
     const play = document.createElement('button');
     play.className = 'icon-btn play';
     play.textContent = '▶';
-    play.title = 'Посмотреть';
+    play.title = t('watch');
     play.addEventListener('click', (e) => {
       e.stopPropagation();
       playAt(m.start);
       el.playerSegmentBadge.hidden = false;
-      el.playerSegmentBadge.textContent = `Слово «${m.word}»: ${formatTime(m.start)}`;
+      el.playerSegmentBadge.textContent = t('word_badge', { w: m.word, time: formatTime(m.start) });
     });
     row.appendChild(play);
 
     const add = document.createElement('button');
     add.className = 'icon-btn';
     add.textContent = '＋';
-    add.title = 'Добавить в моменты';
+    add.title = t('add_to_moments');
     add.addEventListener('click', (e) => {
       e.stopPropagation();
       addSegmentFromWord(m);
-      toast(`Добавлено: «${m.word}» в ${formatTime(m.start)}`, 'success');
+      toast(t('added_word', { w: m.word, time: formatTime(m.start) }), 'success');
     });
     row.appendChild(add);
 
@@ -1529,11 +1537,11 @@ function renderTimeline() {
         threshold: 0,
         segments: [],
       });
-      el.tlMeta.textContent = `${formatTime(v.info.duration)} · речь распознана`;
+      el.tlMeta.textContent = t('speech_recognized_meta', { dur: formatTime(v.info.duration) });
     } else {
       timeline.clear();
       timeline.clearWords();
-      el.tlMeta.textContent = `${formatTime(v.info.duration)} · нет анализа`;
+      el.tlMeta.textContent = t('no_analysis_meta', { dur: formatTime(v.info.duration) });
     }
     return;
   }
@@ -1545,18 +1553,18 @@ function renderTimeline() {
   });
   const n = v.analysis.segments.length;
   const nAi = v.analysis.segments.filter((s) => segSource(s) === 'ai').length;
-  el.tlMeta.textContent = `${formatTime(v.info.duration)} · ${n} моментов` + (nAi ? ` (${nAi} ИИ)` : '');
+  el.tlMeta.textContent = t('tl_meta_moments', { dur: formatTime(v.info.duration), n }) + (nAi ? ` (${nAi} ${t('ai_src')})` : '');
 }
 
 function renderSegments() {
   const segs = activeSegments();
   el.segmentsList.innerHTML = '';
   if (!activeVideo()?.analysis) {
-    el.segmentsList.appendChild(emptyRow('Анализ ещё не выполнен. Нажмите «Пересчитать».'));
+    el.segmentsList.appendChild(emptyRow(t('seg_empty')));
     return;
   }
   if (!segs.length) {
-    el.segmentsList.appendChild(emptyRow('Интересные моменты не найдены. Попробуйте снизить строгость отбора.'));
+    el.segmentsList.appendChild(emptyRow(t('seg_not_found')));
     return;
   }
 
@@ -1569,7 +1577,7 @@ function renderSegments() {
     chk.type = 'checkbox';
     chk.className = 'seg-check';
     chk.checked = seg.enabled !== false;
-    chk.title = 'Включить в монтаж';
+    chk.title = t('include_in_montage');
     chk.addEventListener('change', () => {
       seg.enabled = chk.checked;
       timeline.render();
@@ -1581,10 +1589,10 @@ function renderSegments() {
     time.className = 'seg-time';
     const inpS = document.createElement('input');
     inpS.value = formatTime(seg.start, true);
-    inpS.title = 'Начало (м:сс)';
+    inpS.title = t('start_time');
     const inpE = document.createElement('input');
     inpE.value = formatTime(seg.end, true);
-    inpE.title = 'Конец (м:сс)';
+    inpE.title = t('end_time');
     const sep = document.createElement('span');
     sep.textContent = '–';
     const dur = document.createElement('span');
@@ -1622,14 +1630,14 @@ function renderSegments() {
     const src = document.createElement('span');
     const srcVal = segSource(seg);
     src.className = 'seg-source ' + (srcVal === 'ai' ? 'ai' : 'alg');
-    src.textContent = srcVal === 'ai' ? 'ИИ' : 'АЛГ';
-    src.title = srcVal === 'ai' && seg.reason ? `ИИ: ${seg.reason}` : 'Найден сигнальным анализом';
+    src.textContent = srcVal === 'ai' ? t('ai_src') : t('alg_src');
+    src.title = srcVal === 'ai' && seg.reason ? t('ai_reason', { reason: seg.reason }) : t('signal_found');
     row.appendChild(src);
 
     const score = document.createElement('span');
     score.className = 'seg-score';
     score.textContent = `⚡ ${Math.round(seg.peak * 100)}`;
-    score.title = 'Оценка интересности';
+    score.title = t('interest_score');
     row.appendChild(score);
 
     const btns = document.createElement('div');
@@ -1637,7 +1645,7 @@ function renderSegments() {
     const play = document.createElement('button');
     play.className = 'icon-btn play';
     play.textContent = '▶';
-    play.title = 'Посмотреть момент';
+    play.title = t('watch_moment');
     play.addEventListener('click', (e) => {
       e.stopPropagation();
       previewSegment(i);
@@ -1645,7 +1653,7 @@ function renderSegments() {
     const dl = document.createElement('button');
     dl.className = 'icon-btn';
     dl.textContent = '⬇';
-    dl.title = 'Скачать этот момент отдельным файлом';
+    dl.title = t('download_moment');
     dl.addEventListener('click', (e) => {
       e.stopPropagation();
       downloadSegment(i);
@@ -1653,7 +1661,7 @@ function renderSegments() {
     const del = document.createElement('button');
     del.className = 'icon-btn del';
     del.textContent = '🗑';
-    del.title = 'Удалить момент';
+    del.title = t('delete_moment');
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       // Удаляем по ссылке из полного массива (активный список может быть отфильтрован).
@@ -1716,7 +1724,7 @@ function previewSegment(i) {
   applyRowActive(i);
   playAt(seg.start);
   el.playerSegmentBadge.hidden = false;
-  el.playerSegmentBadge.textContent = `Момент ${i + 1}: ${formatTime(seg.start)}–${formatTime(seg.end)}`;
+  el.playerSegmentBadge.textContent = t('moment_badge', { i: i + 1, start: formatTime(seg.start), end: formatTime(seg.end) });
   state.playing = { videoId: state.activeId, start: seg.start, end: seg.end };
 }
 
@@ -1735,7 +1743,7 @@ function addSegmentFromCurrent() {
   renderTimeline();
   renderSegments();
   rebuildQueue();
-  toast('Момент добавлен — отрегулируйте границы', 'info');
+  toast(t('moment_added'), 'info');
 }
 
 // Очистить все найденные моменты видео (с сохранением на сервере, чтобы
@@ -1754,7 +1762,7 @@ async function clearVideoSegments(id) {
   renderSidebar();
   if (state.activeId === id) renderAnalysisStatus();
   rebuildQueue();
-  toast('Моменты очищены', 'info');
+  toast(t('moments_cleared'), 'info');
 }
 
 function clearSegments() {
@@ -1789,20 +1797,20 @@ function renderQueue() {
   if (!state.queue.length) {
     const d = document.createElement('div');
     d.className = 'mq-empty';
-    d.textContent = 'Включите моменты в сборку — отмечайте их галочками в списке.';
+    d.textContent = t('mq_empty');
     el.montageQueue.appendChild(d);
     return;
   }
   state.queue.forEach((q, i) => {
     const item = document.createElement('div');
     item.className = 'mq-item';
-    item.title = 'Открыть в плеере';
+    item.title = t('open_in_player');
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
     chk.className = 'seg-check';
     chk.checked = q.seg.enabled !== false;
-    chk.title = 'Включить/выключить момент в монтаже';
+    chk.title = t('toggle_in_montage');
     chk.addEventListener('change', (ev) => {
       ev.stopPropagation();
       q.seg.enabled = chk.checked;
@@ -1833,7 +1841,7 @@ async function jumpTo(videoId, start, end) {
   }
   playAt(start);
   el.playerSegmentBadge.hidden = false;
-  el.playerSegmentBadge.textContent = `Сборка: ${formatTime(start)}–${formatTime(end)}`;
+  el.playerSegmentBadge.textContent = t('assembly_badge', { start: formatTime(start), end: formatTime(end) });
   state.playing = { videoId, start, end };
 }
 
@@ -1851,7 +1859,7 @@ async function downloadSegment(i) {
   el.jobProgress.hidden = false;
   el.jobFill.style.width = '0%';
   el.jobText.textContent = '0%';
-  el.jobLabel.textContent = `Скачивание момента ${i + 1}…`;
+  el.jobLabel.textContent = t('downloading_moment', { i: i + 1 });
 
   const items = [{ video_id: v.id, start: seg.start, end: seg.end }];
   try {
@@ -1869,7 +1877,7 @@ async function downloadSegment(i) {
     state.jobs.set(job_id, { kind: 'montage', single: { index: i, videoId: v.id } });
   } catch (e) {
     el.jobProgress.hidden = true;
-    toast(`Не удалось запустить скачивание: ${e.message}`, 'error');
+    toast(t('err_start_download', { msg: e.message }), 'error');
   }
 }
 
@@ -1879,7 +1887,7 @@ async function startMontage() {
   el.jobProgress.hidden = false;
   el.jobFill.style.width = '0%';
   el.jobText.textContent = '0%';
-  el.jobLabel.textContent = 'Подготовка…';
+  el.jobLabel.textContent = t('preparing');
   el.btnMontage.disabled = true;
 
   const items = state.queue.map((q) => ({ video_id: q.videoId, start: q.start, end: q.end }));
@@ -1899,13 +1907,13 @@ async function startMontage() {
   } catch (e) {
     el.jobProgress.hidden = true;
     el.btnMontage.disabled = false;
-    toast(`Не удалось запустить монтаж: ${e.message}`, 'error');
+    toast(t('err_start_montage', { msg: e.message }), 'error');
   }
 }
 
 function updateMontageProgress(job) {
   el.jobProgress.hidden = false;
-  el.jobLabel.textContent = job.label || 'Монтаж';
+  el.jobLabel.textContent = job.label || t('montage');
   el.jobFill.style.width = `${Math.round(job.progress * 100)}%`;
   el.jobText.textContent = `${Math.round(job.progress * 100)}%`;
 }
@@ -1925,16 +1933,16 @@ function onMontageDone(job, single) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    toast(`Момент ${single.index + 1} скачан (${formatTime(r.duration)})`, 'success');
+    toast(t('moment_downloaded', { i: single.index + 1, time: formatTime(r.duration) }), 'success');
     return;
   }
 
   el.montageResult.hidden = false;
   const engineTag = r.hw ? ` · ${r.engine}` : ` · CPU`;
-  el.mrMeta.textContent = `${r.segments} моментов · ${formatTime(r.duration)}${engineTag}`;
+  el.mrMeta.textContent = t('mr_meta', { n: r.segments, time: formatTime(r.duration), engine: engineTag });
   el.btnDownload.href = r.url;
   el.btnDownload.download = `momentcut_${Date.now()}.${ext}`;
-  toast('Монтаж готов!', 'success');
+  toast(t('montage_ready'), 'success');
 }
 
 // ---------------------------------------------------------------
@@ -1950,9 +1958,9 @@ async function saveProject() {
     a.download = `momentcut_project_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 3000);
-    toast(`Проект сохранён (${state.videos.length} видео)`, 'success');
+    toast(t('project_saved', { n: state.videos.length }), 'success');
   } catch (e) {
-    toast(`Не удалось сохранить проект: ${e.message}`, 'error');
+    toast(t('err_save_project', { msg: e.message }), 'error');
   }
 }
 
@@ -1961,7 +1969,7 @@ async function loadProject(file) {
     const text = await file.text();
     const data = JSON.parse(text);
     if (!data || !Array.isArray(data.videos)) {
-      throw new Error('Некорректный файл проекта');
+      throw new Error(t('err_bad_project'));
     }
     const res = await API.loadProject(data);
     state.videos = [...res.loaded];
@@ -1972,13 +1980,36 @@ async function loadProject(file) {
     } else {
       showEmpty();
     }
-    const msg = `Проект загружен: ${res.loaded.length} видео` +
-      (res.failed.length ? `, ${res.failed.length} не найдено` : '');
+    const msg = t('project_loaded', { n: res.loaded.length }) +
+      (res.failed.length ? t('project_failed_count', { n: res.failed.length }) : '');
     toast(msg, res.failed.length ? 'error' : 'success');
   } catch (e) {
-    toast(`Не удалось загрузить проект: ${e.message}`, 'error');
+    toast(t('err_load_project', { msg: e.message }), 'error');
   }
 }
+
+// ---------------------------------------------------------------
+// Смена языка интерфейса
+// ---------------------------------------------------------------
+// Перерисовывает динамический контент (статичные элементы уже обновлены
+// внутри setLang → applyDom).
+function refreshLanguage() {
+  configureEngineSelect();   // подсказки движков и тексты опций
+  renderSidebar();
+  renderAnalysisStatus();
+  renderTimeline();
+  renderSegments();
+  rebuildQueue();
+  updateSpeechPanel(activeVideo());
+  renderAllWords(activeVideo());
+  updatePreviewSubs();
+  syncDiarUI();
+  syncAiUI();
+  syncTransitionUI();
+  updateSegFilters();
+  try { timeline.render(); } catch { /* ignore */ }
+}
+onLangChange(refreshLanguage);
 
 // ---------------------------------------------------------------
 // Старт
