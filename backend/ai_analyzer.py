@@ -39,6 +39,12 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 DEFAULT_FRAME_STEP = 10   # отправлять каждый N-й кадр видео по умолчанию
+# Сколько ПРОШЛЫХ фрагментов (окон) отправлять как текстовый контекст «что было
+# в видео»: модель видит, что происходило до текущего окна, поэтому может
+# продолжить интересный момент, начавшийся раньше окна. В теории информации
+# 4 фрагментов достаточно.
+DEFAULT_CONTEXT_WINDOWS = 4
+_CONTEXT_MAX_CHARS = 800  # максимум символов резюме одного фрагмента в контексте
 
 
 class AnalysisCancelled(RuntimeError):
@@ -343,10 +349,42 @@ def _words_to_text(words: list[dict]) -> str:
     return "\n".join(parts)
 
 
+def _window_context_text(w_start: float, w_end: float, words: list[dict],
+                         window_segments: list[dict] | None,
+                         method: str) -> str:
+    """Компактное резюме обработанного фрагмента для контекста следующих окон.
+
+    Содержит расшифровку речи фрагмента (если метод использует речь) и краткий
+    список отмеченных в нём моментов. Используется как «что было в видео до
+    текущего окна» — чтобы модель понимала продолжающееся действие и не теряла
+    момент, начавшийся раньше окна. Обрезается, чтобы контекст был небольшим.
+    Возвращает "" — если о фрагменте сказать нечего.
+    """
+    parts: list[str] = []
+    if method in ("frames_speech", "speech") and words:
+        text = _words_to_text(words).strip()
+        if text:
+            parts.append(text)
+    if window_segments:
+        found = "; ".join(
+            f"{s.get('start', 0):.1f}-{s.get('end', 0):.1f}с"
+            + (f" ({s.get('reason', '')})" if s.get("reason") else "")
+            for s in window_segments
+        )
+        parts.append("Отмеченные моменты: " + found)
+    if not parts:
+        return ""
+    body = " | ".join(parts)
+    if len(body) > _CONTEXT_MAX_CHARS:
+        body = body[:_CONTEXT_MAX_CHARS].rstrip() + "…"
+    return f"[{w_start:.1f}-{w_end:.1f}с] " + body
+
+
 def _build_messages(system_prompt: str, *, method: str, duration: float,
                     frames: list, words: list[dict],
                     window: tuple[float, float] | None = None,
-                    max_segments: int = 0) -> list[dict]:
+                    max_segments: int = 0,
+                    prev_context: list[str] | None = None) -> list[dict]:
     """Собирает сообщения для чата: системный промпт + кадры/речь пользователя.
 
     window=(start, end) — если анализируется фрагмент видео, в инструкцию
@@ -354,6 +392,10 @@ def _build_messages(system_prompt: str, *, method: str, duration: float,
     max_segments > 0 — ограничение числа моментов на всё видео: модель просят
     проставлять score (1..100) каждому сегменту и не возвращать больше, чем
     нужно (итоговый отбор по score делает api_analyze).
+    prev_context — текстовые резюме последних обработанных фрагментов
+    (см. _window_context_text): добавляются отдельным блоком «контекста», чтобы
+    модель знала, что происходило в видео до текущего окна, и могла продолжить
+    интересный момент, начавшийся раньше окна.
     """
     if window and window[1] > window[0]:
         range_note = (
@@ -401,6 +443,20 @@ def _build_messages(system_prompt: str, *, method: str, duration: float,
     )
     content: list[dict] = [{"type": "text", "text": instruction}]
 
+    if prev_context:
+        content.append({
+            "type": "text",
+            "text": (
+                "КОНТЕКСТ ПРЕДЫДУЩИХ ФРАГМЕНТОВ ВИДЕО (что происходило до "
+                "анализируемого окна). Моменты из контекста УЖЕ отмечены или "
+                "относятся к прошлым окнам — НЕ дублируй их. Используй контекст "
+                "только чтобы понять: если интересное действие началось раньше "
+                "и продолжается в текущем окне — отметь его продолжение здесь "
+                "(со своими таймкодами в пределах окна):\n"
+                + "\n\n".join(prev_context)
+            ),
+        })
+
     if method in ("frames", "frames_speech"):
         for t, img in frames:
             with open(img, "rb") as f:
@@ -441,7 +497,9 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
                 start_index: int = 0, initial_segments: list[dict] | None = None,
                 initial_heatmap: list[dict] | None = None,
                 pause_event=None, cancel_event=None, pause_cb=None,
-                max_segments: int = 0) -> tuple[list[dict], list[dict]]:
+                max_segments: int = 0,
+                context_windows: int = DEFAULT_CONTEXT_WINDOWS
+                ) -> tuple[list[dict], list[dict]]:
     """Анализирует видео через ИИ-API. Возвращает (сегменты, точки heatmap).
 
     method: 'frames' | 'frames_speech' | 'speech'.
@@ -464,6 +522,12 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
     max_segments > 0 — итоговое ограничение числа моментов: у сегментов
     учитывается score (модель просят его проставлять), оставляются N самых
     высоких по score, затем сортировка по времени.
+
+    context_windows — сколько последних обработанных фрагментов отправлять
+    моделью как текстовый контекст «что было в видео» (см. _window_context_text).
+    Контекст помогает не потерять интересный момент, который начался раньше
+    текущего окна и продолжается в нём. При возобновлении с паузы контекст
+    восстанавливается из слов речи (для speech-методов).
     """
     progress = progress_cb or (lambda *a: None)
     if not endpoint or not str(endpoint).strip():
@@ -475,6 +539,21 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
     all_segments = list(initial_segments or [])
     all_heat = list(initial_heatmap or [])
     sent_frames = 0
+
+    # Скользящий текстовый контекст «что было в видео до текущего окна»:
+    # резюме последних context_windows обработанных фрагментов. При
+    # возобновлении с паузы (start_index > 0) восстанавливаем его из слов
+    # речи для фрагментов до точки остановки.
+    context: list[str] = []
+    if start_index > 0:
+        for j in range(start_index):
+            ws, we = windows[j]
+            entry = _window_context_text(
+                ws, we, _words_in_window(words or [], ws, we), None, method)
+            if entry:
+                context.append(entry)
+        context = context[-context_windows:]
+
     i = start_index
     while i < total:
         # Пауза/остановка между частями (окнами) ответов ИИ.
@@ -505,7 +584,7 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
                 messages = _build_messages(
                     system_prompt, method=method, duration=duration,
                     window=(w_start, w_end), frames=frames, words=w_words,
-                    max_segments=max_segments)
+                    max_segments=max_segments, prev_context=context)
                 raw = _chat(endpoint, api_key, model, messages)
         else:  # speech
             progress(min(0.95, (i + 0.4) / total),
@@ -514,10 +593,17 @@ def api_analyze(path: str, *, endpoint: str, api_key: str | None, model: str,
             messages = _build_messages(
                 system_prompt, method=method, duration=duration,
                 window=(w_start, w_end), frames=[], words=w_words,
-                max_segments=max_segments)
+                max_segments=max_segments, prev_context=context)
             raw = _chat(endpoint, api_key, model, messages)
+        before = len(all_segments)
         all_segments += parse_segments(raw, duration)
         all_heat += parse_heatmap(raw, duration)
+        # Резюме обработанного фрагмента добавляем в контекст следующих окон.
+        entry = _window_context_text(w_start, w_end, w_words,
+                                     all_segments[before:], method)
+        if entry:
+            context.append(entry)
+            context = context[-context_windows:]
         progress(min(0.99, (i + 1) / total),
                  w_end, len(all_segments))
         i += 1
@@ -623,13 +709,16 @@ def analyze_with_ai(path: str, *, endpoint: str, api_key: str | None, model: str
                     initial_segments: list[dict] | None = None,
                     initial_heatmap: list[dict] | None = None,
                     pause_event=None, cancel_event=None,
-                    pause_cb=None, max_segments: int = 0) -> dict:
+                    pause_cb=None, max_segments: int = 0,
+                    context_windows: int = DEFAULT_CONTEXT_WINDOWS) -> dict:
     """Полный ИИ-анализ видео — возвращает структуру как у analyzer.analyze.
 
     frame_step — каждый N-й кадр. chunk_sec — сколько секунд видео уходит за
     один запрос (отправка по частям, чтобы не переполнять контекст).
     start_index/initial_segments/initial_heatmap/pause_event/cancel_event/
     pause_cb — поддержка паузы/возобновления (см. api_analyze).
+    context_windows — сколько прошлых фрагментов отправлять как текстовый
+    контекст «что было в видео» (см. api_analyze).
     Важно: API-ключ НЕ попадает в результат/options (и, соответственно, в кеш).
     """
     info = analyzer.probe_video(path)
@@ -643,7 +732,8 @@ def analyze_with_ai(path: str, *, endpoint: str, api_key: str | None, model: str
         start_index=start_index, initial_segments=initial_segments,
         initial_heatmap=initial_heatmap,
         pause_event=pause_event, cancel_event=cancel_event,
-        pause_cb=pause_cb, max_segments=max_segments)
+        pause_cb=pause_cb, max_segments=max_segments,
+        context_windows=context_windows)
     heatmap = build_heatmap(segments, duration, heat_points=heat_points)
     return {
         "info": info,
